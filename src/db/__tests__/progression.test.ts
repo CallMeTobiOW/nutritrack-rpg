@@ -6,12 +6,14 @@ import {
   createQuest,
   deleteDiaryEntry,
   deleteWater,
+  deleteWeight,
   ensureInitialized,
   logWeight,
   saveProfile,
   toggleQuest,
   updateDiaryEntry,
   updateTargets,
+  updateWeight,
 } from '../actions';
 import { syncProgression } from '../progression';
 import { bonusEventId, questEventId } from '../../lib/quests';
@@ -163,6 +165,60 @@ describe('profile and weight', () => {
     expect(ws[0].kg).toBe(79.6);
     expect(await db.achievements.get('baseline')).toBeTruthy();
     await expect(logWeight(today, 5)).rejects.toThrow();
+  });
+
+  it('range-checks edited weigh-ins and refuses to overwrite another day', async () => {
+    await logWeight('2026-11-01', 82);
+    await logWeight('2026-11-15', 81);
+    const [nov1] = await db.weights.where('date').equals('2026-11-01').toArray();
+    await expect(updateWeight(nov1.id, { kg: 0.5 })).rejects.toThrow(/out of range/);
+    await expect(updateWeight(nov1.id, { date: '2026-11-15' })).rejects.toThrow(/already a weigh-in/);
+    expect(await db.weights.count()).toBe(2);
+    expect((await db.weights.get(nov1.id))?.kg).toBe(82);
+  });
+
+  it('keeps the profile weight and targets in step when weigh-ins are edited or deleted', async () => {
+    await saveProfile({ sex: 'male', age: 30, heightCm: 180, weightKg: 80, activity: 'moderate', objective: 'maintain' }, { onboard: true });
+    await logWeight('2026-11-10', 80);
+    await logWeight(today, 90);
+    expect((await db.profile.get('me'))?.weightKg).toBe(90);
+    const latest = (await db.weights.where('date').equals(today).first())!;
+    await updateWeight(latest.id, { kg: 85 });
+    expect((await db.profile.get('me'))?.weightKg).toBe(85);
+    await deleteWeight(latest.id);
+    const p = await db.profile.get('me');
+    expect(p?.weightKg).toBe(80);
+    expect(p?.targets.protein).toBe(128); // 1.6 g/kg × 80
+  });
+
+  it('drops an out-of-range goal weight', async () => {
+    await saveProfile({ goalWeightKg: 75 });
+    expect((await db.profile.get('me'))?.goalWeightKg).toBe(75);
+    await saveProfile({ goalWeightKg: 1 });
+    expect((await db.profile.get('me'))?.goalWeightKg).toBeUndefined();
+  });
+
+  it('keeps calorie targets automatic when only the water goal is changed', async () => {
+    await saveProfile({ sex: 'male', age: 30, heightCm: 180, weightKg: 80, activity: 'moderate', objective: 'maintain' }, { onboard: true });
+    await updateTargets({ waterMl: 3000 });
+    await logWeight(today, 60);
+    const p = await db.profile.get('me');
+    expect(p?.customTargets).toBe(false);
+    expect(p?.targets.protein).toBe(96); // follows the new weight
+    expect(p?.targets.waterMl).toBe(3000); // the chosen water goal is kept
+  });
+});
+
+describe('level-ups', () => {
+  it('celebrates a level only the first time it is reached', async () => {
+    const q = await createQuest({ title: 'Big one', category: 'side', recurrence: 'daily', xp: 100, icon: 'star' });
+    const levels = () => getCelebrations().filter((c) => c.item.kind === 'level').length;
+    await toggleQuest(q.id, today);
+    expect(levels()).toBe(1);
+    getCelebrations().forEach((c) => dismissCelebration(c.key));
+    await toggleQuest(q.id, today); // untick: back below the level
+    await toggleQuest(q.id, today); // tick again
+    expect(levels()).toBe(0);
   });
 });
 

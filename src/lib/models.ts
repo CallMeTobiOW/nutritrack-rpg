@@ -173,6 +173,8 @@ export interface Profile {
   microTargets: Partial<Record<NutrientKey, number>>;
   /** True when the player has edited targets by hand. */
   customTargets: boolean;
+  /** True when the player set their own water goal; kept when other targets are recalculated. */
+  customWater?: boolean;
   onboarded: boolean;
   createdAt: number;
   updatedAt: number;
@@ -190,4 +192,6 @@ export interface Settings {
   /** Ids of briefings shown in the current cycle, to avoid repeats. */
   seenBriefings: string[];
   lastBackupAt?: number;
+  /** Highest level reached, so a level-up is celebrated only the first time. */
+  highestLevel?: number;
 }

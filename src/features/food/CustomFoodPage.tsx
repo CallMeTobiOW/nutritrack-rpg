@@ -13,6 +13,7 @@ import { Button } from '../../components/ui/Button';
 import { Label, NumberInput, TextInput } from '../../components/ui/Field';
 import { Segmented } from '../../components/ui/Segmented';
 import { setPendingFood } from './pendingFood';
+import { per100Problem } from '../../lib/food';
 
 type Basis = '100' | 'serving';
 type Values = Partial<Record<NutrientKey | 'salt', number>>;
@@ -81,8 +82,8 @@ export default function CustomFoodPage() {
     if (!name.trim()) return setError('Give the food a name.');
     if (values.energy === undefined) return setError('Energy (kcal) is required so it can count towards your calories.');
     if (basis === 'serving' && !(servingAmount && servingAmount > 0)) return setError('Enter the serving size in grams/ml.');
-    for (const [k, v] of Object.entries(values)) {
-      if (v !== undefined && (v < 0 || !Number.isFinite(v))) return setError(`${k} cannot be negative.`);
+    for (const [k, v] of Object.entries(values) as [NutrientKey | 'salt', number | undefined][]) {
+      if (v !== undefined && (v < 0 || !Number.isFinite(v))) return setError(`${k === 'salt' ? 'Salt' : NUTRIENTS[k].label} cannot be negative.`);
     }
     const factor = basis === 'serving' ? 100 / servingAmount! : 1;
     const per100: NutrientValues = {};
@@ -91,8 +92,8 @@ export default function CustomFoodPage() {
       if (k === 'salt') per100.sodium = saltToSodiumMg(v) * factor;
       else per100[k] = v * factor;
     }
-    const macroMass = (per100.protein ?? 0) + (per100.carbs ?? 0) + (per100.fat ?? 0) + (per100.fiber ?? 0);
-    if (macroMass > 101) return setError('Protein, carbs, fat and fibre add up to more than 100 g per 100 g. Check the values or the serving size.');
+    const problem = per100Problem(per100, unit);
+    if (problem) return setError(problem);
 
     const servings = servingAmount && servingAmount > 0 ? [{ label: servingLabel.trim() || `1 serving (${servingAmount} ${unit})`, amount: servingAmount }] : [];
     const food = await saveCustomFood({ name, brand, barcode, unit, per100, servings }, editId ?? undefined);

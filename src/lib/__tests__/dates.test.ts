@@ -21,6 +21,12 @@ describe('dates', () => {
     expect(diffDays('2026-10-24', '2026-10-26')).toBe(2);
   });
 
+  it('steps past a calendar day that a time zone skipped', () => {
+    // Samoa skipped 30 Dec 2011; stepping back must not stall on that day.
+    expect(addDays('2011-12-30', -1)).toBe('2011-12-29');
+    expect(addDays('2011-12-31', -1)).toBe('2011-12-30');
+  });
+
   it('builds inclusive ranges', () => {
     expect(dateRange('2026-02-27', '2026-03-02')).toEqual(['2026-02-27', '2026-02-28', '2026-03-01', '2026-03-02']);
     expect(lastNDays('2026-11-17', 3)).toEqual(['2026-11-15', '2026-11-16', '2026-11-17']);

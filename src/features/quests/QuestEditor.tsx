@@ -3,7 +3,7 @@ import { Plus, Trash2, Zap } from 'lucide-react';
 import { addQuestFromTemplate, createQuest, deleteQuest, updateQuest, type QuestInput } from '../../db/actions';
 import { QUEST_TEMPLATES } from '../../db/defaults';
 import type { AutoRule, Quest, QuestCategory, QuestRecurrence } from '../../lib/models';
-import { AUTO_RULE_META, CATEGORY_META } from '../../lib/quests';
+import { AUTO_RULE_META, CATEGORY_META, autoRuleFits } from '../../lib/quests';
 import { LIMITS } from '../../lib/limits';
 import { cn } from '../../lib/cn';
 import { Sheet } from '../../components/ui/Sheet';
@@ -46,6 +46,9 @@ export function QuestEditor({ open, quest, existing, onClose }: Props) {
   const titles = new Set(existing.map((q) => q.title.toLowerCase()));
   const templates = QUEST_TEMPLATES.filter((t) => !titles.has(t.title.toLowerCase()));
   const set = <K extends keyof QuestInput>(k: K, v: QuestInput[K]) => setForm((f) => ({ ...f, [k]: v }));
+  // Changing how often a quest repeats drops a tracking rule that no longer fits it.
+  const setRecurrence = (recurrence: QuestRecurrence) =>
+    setForm((f) => ({ ...f, recurrence, auto: f.auto && autoRuleFits(f.auto, recurrence) ? f.auto : undefined }));
   const valid = form.title.trim().length > 0 && form.xp >= LIMITS.questXp.min && form.xp <= LIMITS.questXp.max;
 
   const save = async () => {
@@ -142,7 +145,10 @@ export function QuestEditor({ open, quest, existing, onClose }: Props) {
                 <button
                   key={c}
                   type="button"
-                  onClick={() => setForm((f) => ({ ...f, category: c, recurrence: editing ? f.recurrence : DEFAULT_RECURRENCE[c] }))}
+                  onClick={() => {
+                    set('category', c);
+                    if (!editing) setRecurrence(DEFAULT_RECURRENCE[c]);
+                  }}
                   className={cn('rounded-xl border px-3 py-2 text-sm font-semibold', form.category === c ? 'border-primary bg-primary/12' : 'border-line text-muted')}
                 >
                   {CATEGORY_META[c].label}
@@ -154,7 +160,7 @@ export function QuestEditor({ open, quest, existing, onClose }: Props) {
             <Label>Repeats</Label>
             <Segmented
               value={form.recurrence}
-              onChange={(v) => set('recurrence', v)}
+              onChange={setRecurrence}
               options={[
                 { value: 'daily', label: 'Daily' },
                 { value: 'weekly', label: 'Weekly' },
@@ -171,7 +177,7 @@ export function QuestEditor({ open, quest, existing, onClose }: Props) {
               <Label htmlFor="q-auto">Tracking</Label>
               <Select id="q-auto" value={form.auto ?? ''} onChange={(e) => set('auto', (e.target.value || undefined) as AutoRule | undefined)}>
                 <option value="">Tick by hand</option>
-                {(Object.keys(AUTO_RULE_META) as AutoRule[]).map((r) => (
+                {(Object.keys(AUTO_RULE_META) as AutoRule[]).filter((r) => autoRuleFits(r, form.recurrence)).map((r) => (
                   <option key={r} value={r}>
                     Auto: {AUTO_RULE_META[r].label}
                   </option>

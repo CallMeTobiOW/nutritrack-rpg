@@ -183,7 +183,23 @@ export class OffError extends Error {
   }
 }
 
-async function getJson(url: string, signal?: AbortSignal): Promise<unknown> {
+/** Waits between attempts. Open Food Facts often answers a busy moment with a 503. */
+export const RETRY_DELAYS_MS = [600, 1500];
+
+const UNREACHABLE =
+  'Open Food Facts did not answer. The service may be busy or your connection may have dropped. Try again in a moment.';
+
+function wait(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(resolve, ms);
+    signal?.addEventListener('abort', () => {
+      clearTimeout(t);
+      reject(new DOMException('Aborted', 'AbortError'));
+    }, { once: true });
+  });
+}
+
+async function fetchOnce(url: string, signal?: AbortSignal): Promise<unknown> {
   if (typeof navigator !== 'undefined' && navigator.onLine === false) {
     throw new OffError('You are offline. Saved foods are still available.', 'offline');
   }
@@ -192,12 +208,27 @@ async function getJson(url: string, signal?: AbortSignal): Promise<unknown> {
     res = await fetch(url, { signal, headers: { Accept: 'application/json' } });
   } catch (e) {
     if ((e as Error).name === 'AbortError') throw e;
-    throw new OffError('Could not reach Open Food Facts. Check your connection.', 'network');
+    // A 503 without CORS headers also lands here, so do not blame the connection alone.
+    throw new OffError(UNREACHABLE, 'network');
   }
   if (res.status === 429) throw new OffError('Open Food Facts is busy. Try again in a minute.', 'rate-limit');
   if (res.status === 404) throw new OffError('Product not found.', 'not-found');
+  if (res.status >= 500) throw new OffError(UNREACHABLE, 'network');
   if (!res.ok) throw new OffError(`Open Food Facts error (${res.status}).`, 'network');
   return res.json();
+}
+
+/** Fetch JSON, retrying briefly when the service is busy or the request fails in transit. */
+async function getJson(url: string, signal?: AbortSignal): Promise<unknown> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await fetchOnce(url, signal);
+    } catch (e) {
+      const retryable = e instanceof OffError && e.kind === 'network';
+      if (!retryable || attempt >= RETRY_DELAYS_MS.length) throw e;
+      await wait(RETRY_DELAYS_MS[attempt], signal);
+    }
+  }
 }
 
 export async function lookupBarcode(code: string, signal?: AbortSignal): Promise<Omit<Food, 'id'> | null> {

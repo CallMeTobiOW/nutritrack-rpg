@@ -118,11 +118,19 @@ export function withProgression<T>(mutation: () => Promise<T>, opts: MutationOpt
     const result = await mutation();
     const report = await syncNow(opts.today ?? toDateKey());
     const levelAfter = await currentLevel();
+    // Level-ups are celebrated once: unticking a quest and ticking it again
+    // must not replay the overlay, so compare against the highest level reached.
+    const settings = await db.settings.get('settings');
+    const highest = Math.max(settings?.highestLevel ?? levelBefore, levelBefore);
+    const newLevel = levelAfter > highest;
+    if (settings && (newLevel || settings.highestLevel === undefined)) {
+      await db.settings.put({ ...settings, highestLevel: Math.max(highest, levelAfter) });
+    }
     if (!opts.silent) {
       for (const q of report.completed) celebrate({ kind: 'quest', title: q.title, xp: q.xp });
       if (report.bonus) celebrate({ kind: 'bonus', title: report.bonus.title, xp: report.bonus.xp });
       for (const a of report.unlocked) celebrate({ kind: 'achievement', id: a.id, title: a.title, xp: a.xp });
-      if (levelAfter > levelBefore) celebrate({ kind: 'level', level: levelAfter, title: rankTitle(levelAfter) });
+      if (newLevel) celebrate({ kind: 'level', level: levelAfter, title: rankTitle(levelAfter) });
     }
     return result;
   };

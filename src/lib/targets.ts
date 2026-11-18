@@ -15,7 +15,11 @@
  *          / 2.5 L (male). We use it as a simple drinking goal; adjust freely.
  *
  * Safety rails: weight-loss deficits are capped at 500 kcal and 20 % of
- * maintenance, and never go below 1500 kcal (male) / 1200 kcal (female).
+ * maintenance, and a deficit never takes the target below 1500 kcal (male) /
+ * 1200 kcal (female). When maintenance itself is below that floor, no deficit
+ * is applied and the target is maintenance.
+ * Protein is capped at 35 % of energy so that, at high body weights, it does
+ * not crowd carbohydrate out of the plan.
  */
 import { MICRO_KEYS, type NutrientKey } from './nutrients';
 import { referenceIntake, type Sex } from './references';
@@ -82,10 +86,11 @@ export function calorieTarget(stats: BodyStats): number {
 }
 
 const PROTEIN_G_PER_KG: Record<Objective, number> = { lose: 1.8, maintain: 1.6, build: 1.8 };
+const PROTEIN_MAX_ENERGY_SHARE = 0.35;
 
 export function suggestTargets(stats: BodyStats): Targets {
   const calories = calorieTarget(stats);
-  const protein = Math.round(stats.weightKg * PROTEIN_G_PER_KG[stats.objective]);
+  const protein = Math.round(Math.min(stats.weightKg * PROTEIN_G_PER_KG[stats.objective], (calories * PROTEIN_MAX_ENERGY_SHARE) / 4));
   const fat = Math.round((calories * 0.3) / 9);
   const carbs = Math.max(0, Math.round((calories - protein * 4 - fat * 9) / 4));
   return {

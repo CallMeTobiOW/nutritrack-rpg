@@ -57,6 +57,13 @@ describe('macro suggestions', () => {
   it('raises protein when losing weight', () => {
     expect(suggestTargets({ ...male, objective: 'lose' }).protein).toBe(144);
   });
+
+  it('caps protein at 35% of energy so it does not crowd out carbs at high body weights', () => {
+    const heavy: BodyStats = { sex: 'female', age: 25, heightCm: 150, weightKg: 150, activity: 'sedentary', objective: 'lose' };
+    const t = suggestTargets(heavy);
+    expect(t.protein * 4).toBeLessThanOrEqual(t.calories * 0.35 + 2);
+    expect(t.carbs * 4).toBeGreaterThan(t.calories * 0.3);
+  });
 });
 
 describe('micronutrient references', () => {

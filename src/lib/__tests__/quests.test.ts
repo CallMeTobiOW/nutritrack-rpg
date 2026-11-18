@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { DiaryEntry, Quest, XpEvent } from '../models';
 import {
+  autoRuleFits,
   boardProgress,
   bonusEventId,
   computeDayMetrics,
@@ -117,6 +118,27 @@ describe('reconcileQuests', () => {
     const ev = makeQuestEvent(water, today, 0);
     const r = reconcileQuests([water], new Map([[ev.id, ev]]), ctxWith([], 1500), 50, 0);
     expect(r.remove).toContain(ev.id);
+  });
+
+  it('ties auto rules to a repeat setting they make sense for', () => {
+    expect(autoRuleFits('water', 'daily')).toBe(true);
+    expect(autoRuleFits('water', 'once')).toBe(true);
+    expect(autoRuleFits('water', 'weekly')).toBe(false);
+    expect(autoRuleFits('weighIn', 'weekly')).toBe(true);
+    expect(autoRuleFits('weighIn', 'once')).toBe(true);
+    expect(autoRuleFits('weighIn', 'daily')).toBe(false);
+  });
+
+  it('ignores a weekly quest with a day-based rule, so its XP does not flip each new day', () => {
+    const weeklyWater = quest({ id: 'ww', auto: 'water', recurrence: 'weekly', category: 'weekly' });
+    expect(reconcileQuests([weeklyWater], new Map(), ctxWith([], 2500), 0, 0).add).toEqual([]);
+    const ev = makeQuestEvent(weeklyWater, today, 0);
+    expect(reconcileQuests([weeklyWater], new Map([[ev.id, ev]]), ctxWith([], 10), 0, 0).remove).toEqual([]);
+  });
+
+  it('does not pay a daily weigh-in quest every day from one weekly weigh-in', () => {
+    const dailyWeigh = quest({ id: 'dw', auto: 'weighIn' });
+    expect(reconcileQuests([dailyWeigh], new Map(), ctxWith([], 0, true), 0, 0).add).toEqual([]);
   });
 
   it('is idempotent: no duplicate XP on repeated syncs', () => {
