@@ -1,0 +1,233 @@
+import { useEffect, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { ChevronDown, Info, Trash2 } from 'lucide-react';
+import { db } from '../../db/db';
+import { deleteFood, saveCustomFood } from '../../db/actions';
+import { MICRO_KEYS, NUTRIENTS, type NutrientKey, type NutrientValues } from '../../lib/nutrients';
+import type { MeasureUnit } from '../../lib/nutrition';
+import { cn } from '../../lib/cn';
+import { Page } from '../../components/layout/Page';
+import { PageHeader } from '../../components/ui/Misc';
+import { Card } from '../../components/ui/Card';
+import { Button } from '../../components/ui/Button';
+import { Label, NumberInput, TextInput } from '../../components/ui/Field';
+import { Segmented } from '../../components/ui/Segmented';
+import { setPendingFood } from './pendingFood';
+
+type Basis = '100' | 'serving';
+type Values = Partial<Record<NutrientKey | 'salt', number>>;
+
+const MAIN_FIELDS: { key: NutrientKey | 'salt'; label: string; unit: string }[] = [
+  { key: 'energy', label: 'Energy', unit: 'kcal' },
+  { key: 'protein', label: 'Protein', unit: 'g' },
+  { key: 'carbs', label: 'Carbohydrate', unit: 'g' },
+  { key: 'sugar', label: 'of which sugars', unit: 'g' },
+  { key: 'fat', label: 'Fat', unit: 'g' },
+  { key: 'satFat', label: 'of which saturates', unit: 'g' },
+  { key: 'fiber', label: 'Fibre', unit: 'g' },
+  { key: 'salt', label: 'Salt', unit: 'g' },
+];
+
+/** Salt on UK/EU labels = sodium × 2.5. We store sodium in mg. */
+const saltToSodiumMg = (g: number) => g * 400;
+const sodiumMgToSalt = (mg: number) => Math.round((mg / 400) * 100) / 100;
+
+export default function CustomFoodPage() {
+  const navigate = useNavigate();
+  const [params] = useSearchParams();
+  const editId = params.get('id');
+  const meal = params.get('meal');
+  const date = params.get('date');
+  // The scanner replaces itself with this page; the add screen pushes it.
+  const cameFromAdd = !params.get('barcode');
+
+  const [name, setName] = useState('');
+  const [brand, setBrand] = useState('');
+  const [barcode, setBarcode] = useState(params.get('barcode') ?? '');
+  const [unit, setUnit] = useState<MeasureUnit>('g');
+  const [basis, setBasis] = useState<Basis>('100');
+  const [servingLabel, setServingLabel] = useState('');
+  const [servingAmount, setServingAmount] = useState<number | undefined>();
+  const [values, setValues] = useState<Values>({});
+  const [showMicros, setShowMicros] = useState(false);
+  const [error, setError] = useState('');
+  const [loaded, setLoaded] = useState(!editId);
+
+  useEffect(() => {
+    if (!editId) return;
+    void db.foods.get(editId).then((f) => {
+      if (!f) return;
+      setName(f.name);
+      setBrand(f.brand ?? '');
+      setBarcode(f.barcode ?? '');
+      setUnit(f.unit);
+      const v: Values = { ...f.per100 };
+      if (f.per100.sodium !== undefined) v.salt = sodiumMgToSalt(f.per100.sodium);
+      delete v.sodium;
+      setValues(v);
+      if (f.servings[0]) {
+        setServingLabel(f.servings[0].label);
+        setServingAmount(f.servings[0].amount);
+      }
+      setShowMicros(MICRO_KEYS.some((k) => k !== 'sodium' && f.per100[k] !== undefined));
+      setLoaded(true);
+    });
+  }, [editId]);
+
+  const set = (k: NutrientKey | 'salt', v: number | undefined) => setValues((prev) => ({ ...prev, [k]: v }));
+
+  const save = async () => {
+    setError('');
+    if (!name.trim()) return setError('Give the food a name.');
+    if (values.energy === undefined) return setError('Energy (kcal) is required so it can count towards your calories.');
+    if (basis === 'serving' && !(servingAmount && servingAmount > 0)) return setError('Enter the serving size in grams/ml.');
+    for (const [k, v] of Object.entries(values)) {
+      if (v !== undefined && (v < 0 || !Number.isFinite(v))) return setError(`${k} cannot be negative.`);
+    }
+    const factor = basis === 'serving' ? 100 / servingAmount! : 1;
+    const per100: NutrientValues = {};
+    for (const [k, v] of Object.entries(values) as [NutrientKey | 'salt', number | undefined][]) {
+      if (v === undefined) continue; // blank = unknown, never zero
+      if (k === 'salt') per100.sodium = saltToSodiumMg(v) * factor;
+      else per100[k] = v * factor;
+    }
+    const macroMass = (per100.protein ?? 0) + (per100.carbs ?? 0) + (per100.fat ?? 0) + (per100.fiber ?? 0);
+    if (macroMass > 101) return setError('Protein, carbs, fat and fibre add up to more than 100 g per 100 g. Check the values or the serving size.');
+
+    const servings = servingAmount && servingAmount > 0 ? [{ label: servingLabel.trim() || `1 serving (${servingAmount} ${unit})`, amount: servingAmount }] : [];
+    const food = await saveCustomFood({ name, brand, barcode, unit, per100, servings }, editId ?? undefined);
+    if (meal && date && !editId) {
+      if (cameFromAdd) {
+        setPendingFood(food.id);
+        navigate(-1);
+      } else {
+        navigate(`/food/add?meal=${meal}&date=${date}&food=${food.id}`, { replace: true });
+      }
+    } else navigate(-1);
+  };
+
+  if (!loaded) return <Page>{null}</Page>;
+
+  return (
+    <Page>
+      <PageHeader back kicker="Forge a new item" title={editId ? 'Edit food' : 'Custom food'} />
+      <div className="space-y-4">
+        <Card className="space-y-4">
+          <div>
+            <Label htmlFor="cf-name">Name</Label>
+            <TextInput id="cf-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Homemade chilli" maxLength={120} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label htmlFor="cf-brand" hint="Optional">Brand</Label>
+              <TextInput id="cf-brand" value={brand} onChange={(e) => setBrand(e.target.value)} />
+            </div>
+            <div>
+              <Label htmlFor="cf-barcode" hint="Optional">Barcode</Label>
+              <TextInput id="cf-barcode" inputMode="numeric" value={barcode} onChange={(e) => setBarcode(e.target.value.replace(/\D/g, ''))} />
+            </div>
+          </div>
+          <div>
+            <Label>Measured in</Label>
+            <Segmented value={unit} onChange={setUnit} options={[{ value: 'g', label: 'Grams (g)' }, { value: 'ml', label: 'Millilitres (ml)' }]} />
+          </div>
+          <div className="grid grid-cols-[1fr_8rem] gap-3">
+            <div>
+              <Label htmlFor="cf-serving" hint="Optional">Serving name</Label>
+              <TextInput id="cf-serving" value={servingLabel} onChange={(e) => setServingLabel(e.target.value)} placeholder="e.g. 1 bowl" />
+            </div>
+            <div>
+              <Label htmlFor="cf-serving-amt">Size</Label>
+              <NumberInput id="cf-serving-amt" value={servingAmount} onValue={setServingAmount} suffix={unit} />
+            </div>
+          </div>
+        </Card>
+
+        <Card>
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <h2 className="hud-label">Nutrition values</h2>
+            <Segmented
+              size="sm"
+              className="w-48"
+              value={basis}
+              onChange={setBasis}
+              options={[
+                { value: '100', label: `Per 100 ${unit}` },
+                { value: 'serving', label: 'Per serving' },
+              ]}
+            />
+          </div>
+          <p className="mb-3 flex gap-2 text-xs text-muted">
+            <Info size={14} className="mt-0.5 shrink-0 text-primary" />
+            Copy the values from the label. Leave a box empty if it isn&apos;t listed: empty means unknown, not zero.
+          </p>
+          <div className="space-y-2">
+            {MAIN_FIELDS.map((f) => (
+              <NutrientRow key={f.key} label={f.label} unit={f.unit} indent={f.label.startsWith('of which')} value={values[f.key]} onValue={(v) => set(f.key, v)} required={f.key === 'energy'} />
+            ))}
+          </div>
+
+          <button type="button" onClick={() => setShowMicros((v) => !v)} className="mt-4 flex w-full items-center justify-between text-sm font-semibold text-primary">
+            Vitamins &amp; minerals (optional)
+            <ChevronDown size={18} className={cn('transition-transform', showMicros && 'rotate-180')} />
+          </button>
+          {showMicros && (
+            <div className="mt-3 space-y-2">
+              {MICRO_KEYS.filter((k) => k !== 'sodium').map((k) => (
+                <NutrientRow key={k} label={NUTRIENTS[k].label} unit={NUTRIENTS[k].unit} value={values[k]} onValue={(v) => set(k, v)} />
+              ))}
+            </div>
+          )}
+        </Card>
+
+        {error && <p className="rounded-2xl border border-danger/40 bg-danger/10 p-3 text-sm text-danger">{error}</p>}
+
+        <div className="flex gap-2">
+          {editId && (
+            <Button
+              variant="secondary"
+              className="!px-4 text-danger"
+              aria-label="Delete food"
+              onClick={async () => {
+                await deleteFood(editId);
+                navigate(-1);
+              }}
+            >
+              <Trash2 size={18} />
+            </Button>
+          )}
+          <Button variant="primary" size="lg" block onClick={save}>
+            {editId ? 'Save food' : meal ? 'Save and choose portion' : 'Save food'}
+          </Button>
+        </div>
+        {editId && <p className="text-xs text-faint">Changes apply to future entries. Foods already in your diary keep the values they were logged with.</p>}
+      </div>
+    </Page>
+  );
+}
+
+function NutrientRow({
+  label,
+  unit,
+  value,
+  onValue,
+  indent,
+  required,
+}: {
+  label: string;
+  unit: string;
+  value: number | undefined;
+  onValue: (v: number | undefined) => void;
+  indent?: boolean;
+  required?: boolean;
+}) {
+  return (
+    <div className="grid grid-cols-[1fr_9rem] items-center gap-3">
+      <span className={cn('text-sm', indent ? 'pl-4 text-muted' : 'font-medium')}>
+        {label}
+        {required && <span className="text-danger"> *</span>}
+      </span>
+      <NumberInput value={value} onValue={onValue} suffix={unit} aria-label={label} className="!h-10" />
+    </div>
+  );
+}

@@ -1,0 +1,282 @@
+@import 'tailwindcss';
+@import '@fontsource-variable/inter';
+@import '@fontsource/rajdhani/latin-500.css';
+@import '@fontsource/rajdhani/latin-600.css';
+@import '@fontsource/rajdhani/latin-700.css';
+
+/* ────────────────────────────────────────────────────────────────────────────
+   Design tokens. Components use the Tailwind names below (bg-surface,
+   text-muted, border-line …); the raw values switch with [data-theme].
+   ──────────────────────────────────────────────────────────────────────────── */
+:root,
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #070a12;
+  --bg-2: #0b1020;
+  --surface: rgb(17 24 41 / 0.78);
+  --surface-2: #141c30;
+  --surface-3: #1b2540;
+  --line: rgb(130 165 255 / 0.13);
+  --line-strong: rgb(130 165 255 / 0.26);
+  --text: #e9eef8;
+  --muted: #95a1b8;
+  --faint: #5f6b85;
+
+  --primary: #38bdf8;
+  --primary-2: #3b82f6;
+  --gold: #f5c046;
+  --orange: #fb923c;
+  --success: #34d399;
+  --danger: #f87171;
+  --violet: #a78bfa;
+  --cyan: #22d3ee;
+
+  /* Macro series colours: validated for CVD separation on the dark surface. */
+  --protein: #4f8ff7;
+  --carbs: #0ea371;
+  --fat: #c97f0a;
+
+  --glow-primary: 0 0 24px rgb(56 189 248 / 0.35);
+  --glow-gold: 0 0 24px rgb(245 192 70 / 0.35);
+  --shadow-card: 0 1px 0 rgb(255 255 255 / 0.04) inset, 0 10px 30px -12px rgb(0 0 0 / 0.6);
+  --backdrop: rgb(3 6 14 / 0.72);
+  --grid-line: rgb(120 160 255 / 0.05);
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+  --bg: #eef2f8;
+  --bg-2: #e6ebf4;
+  --surface: rgb(255 255 255 / 0.9);
+  --surface-2: #ffffff;
+  --surface-3: #eef2f8;
+  --line: rgb(15 23 42 / 0.09);
+  --line-strong: rgb(15 23 42 / 0.18);
+  --text: #0c1324;
+  --muted: #55607a;
+  --faint: #8a94a9;
+
+  --primary: #0284c7;
+  --primary-2: #2563eb;
+  --gold: #b7791f;
+  --orange: #ea580c;
+  --success: #059669;
+  --danger: #dc2626;
+  --violet: #7c3aed;
+  --cyan: #0891b2;
+
+  --protein: #2563eb;
+  --carbs: #059669;
+  --fat: #d97706;
+
+  --glow-primary: 0 0 18px rgb(2 132 199 / 0.18);
+  --glow-gold: 0 0 18px rgb(183 121 31 / 0.18);
+  --shadow-card: 0 1px 2px rgb(15 23 42 / 0.05), 0 8px 24px -14px rgb(15 23 42 / 0.25);
+  --backdrop: rgb(15 23 42 / 0.4);
+  --grid-line: rgb(15 23 42 / 0.035);
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-bg-2: var(--bg-2);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-text: var(--text);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-primary: var(--primary);
+  --color-primary-2: var(--primary-2);
+  --color-gold: var(--gold);
+  --color-orange: var(--orange);
+  --color-success: var(--success);
+  --color-danger: var(--danger);
+  --color-violet: var(--violet);
+  --color-cyan: var(--cyan);
+  --color-protein: var(--protein);
+  --color-carbs: var(--carbs);
+  --color-fat: var(--fat);
+
+  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-display: 'Rajdhani', 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
+
+  --shadow-card: var(--shadow-card);
+  --shadow-glow: var(--glow-primary);
+  --shadow-glow-gold: var(--glow-gold);
+
+  --animate-fade-up: fade-up 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  --animate-fade-in: fade-in 0.3s ease-out both;
+  --animate-pop: pop 0.45s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+  --animate-sheet-up: sheet-up 0.32s cubic-bezier(0.2, 0.9, 0.25, 1) both;
+  --animate-shimmer: shimmer 2.4s linear infinite;
+  --animate-pulse-glow: pulse-glow 2.6s ease-in-out infinite;
+}
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes pop {
+  0% { transform: scale(0.6); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+@keyframes sheet-up {
+  from { transform: translateY(100%); }
+  to { transform: none; }
+}
+@keyframes shimmer {
+  from { background-position: -200% 0; }
+  to { background-position: 200% 0; }
+}
+@keyframes pulse-glow {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+
+/* ──────────────────────────────── Base ──────────────────────────────── */
+@layer base {
+  html {
+    background: var(--bg);
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    margin: 0;
+    min-height: 100dvh;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-sans);
+    font-feature-settings: 'cv11', 'ss01';
+    -webkit-font-smoothing: antialiased;
+    overscroll-behavior-y: none;
+  }
+  /* Ambient HUD background: soft aurora + faint grid. */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background:
+      radial-gradient(60rem 30rem at 85% -10%, color-mix(in srgb, var(--primary) 14%, transparent), transparent 60%),
+      radial-gradient(50rem 26rem at -10% 10%, color-mix(in srgb, var(--violet) 10%, transparent), transparent 60%),
+      radial-gradient(40rem 30rem at 50% 110%, color-mix(in srgb, var(--orange) 8%, transparent), transparent 60%),
+      linear-gradient(var(--grid-line) 1px, transparent 1px) 0 0 / 100% 32px,
+      linear-gradient(90deg, var(--grid-line) 1px, transparent 1px) 0 0 / 32px 100%,
+      var(--bg);
+  }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  button { cursor: pointer; touch-action: manipulation; }
+  input, select, textarea { font-size: 16px; } /* ≥16px stops iOS zooming on focus */
+  :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 6px; }
+  input[type='number']::-webkit-inner-spin-button,
+  input[type='number']::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+  input[type='number'] { -moz-appearance: textfield; }
+  ::selection { background: color-mix(in srgb, var(--primary) 35%, transparent); }
+}
+
+/* ──────────────────────────────── Utilities ──────────────────────────────── */
+@utility font-hud {
+  font-family: var(--font-display);
+  letter-spacing: 0.04em;
+}
+@utility hud-label {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 0.72rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+@utility tabular {
+  font-variant-numeric: tabular-nums;
+}
+@utility pt-safe {
+  padding-top: env(safe-area-inset-top);
+}
+@utility pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+@utility text-gradient-gold {
+  background: linear-gradient(135deg, var(--gold), var(--orange));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+@utility text-gradient-primary {
+  background: linear-gradient(135deg, var(--cyan), var(--primary-2));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+@utility no-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar { display: none; }
+}
+
+/* Glass card with a hairline gradient border. */
+@utility panel {
+  position: relative;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 1.25rem;
+  box-shadow: var(--shadow-card);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+}
+
+/* HUD corner brackets for feature cards. */
+@utility hud-corners {
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 6px;
+    pointer-events: none;
+    border-radius: 1rem;
+    --c: color-mix(in srgb, var(--primary) 55%, transparent);
+    background:
+      linear-gradient(var(--c), var(--c)) top left / 14px 1.5px,
+      linear-gradient(var(--c), var(--c)) top left / 1.5px 14px,
+      linear-gradient(var(--c), var(--c)) top right / 14px 1.5px,
+      linear-gradient(var(--c), var(--c)) top right / 1.5px 14px,
+      linear-gradient(var(--c), var(--c)) bottom left / 14px 1.5px,
+      linear-gradient(var(--c), var(--c)) bottom left / 1.5px 14px,
+      linear-gradient(var(--c), var(--c)) bottom right / 14px 1.5px,
+      linear-gradient(var(--c), var(--c)) bottom right / 1.5px 14px;
+    background-repeat: no-repeat;
+    opacity: 0.7;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Quest completion effects */
+@keyframes quest-ring {
+  from { transform: scale(1); opacity: 0.9; }
+  to { transform: scale(1.9); opacity: 0; }
+}
+@keyframes quest-spark {
+  from { transform: translate(-50%, -50%) rotate(var(--a)) translateY(0); opacity: 1; }
+  to { transform: translate(-50%, -50%) rotate(var(--a)) translateY(-26px); opacity: 0; }
+}
+@keyframes xp-float {
+  0% { transform: translateY(6px); opacity: 0; }
+  20% { opacity: 1; }
+  100% { transform: translateY(-22px); opacity: 0; }
+}
+@keyframes scan-line {
+  0%, 100% { transform: translateY(-38px); opacity: 0.6; }
+  50% { transform: translateY(38px); opacity: 1; }
+}

@@ -1,0 +1,133 @@
+import { describe, expect, it } from 'vitest';
+import { barcodeCandidates, isValidGtin, normaliseBarcode, offProductToFood, parseNutriments, upcEToUpcA } from '../openFoodFacts';
+
+// Shape mirrors a real Open Food Facts v2 product response (values in g per 100 g).
+const spread = {
+  code: '3017624010701',
+  product_name: 'Hazelnut cocoa spread',
+  brands: 'Test Brand, Other',
+  image_front_small_url: 'https://images.openfoodfacts.org/images/products/301/762/401/0701/front_en.200.jpg',
+  quantity: '400 g',
+  product_quantity_unit: 'g',
+  serving_size: '15 g',
+  serving_quantity: 15,
+  nutriments: {
+    'energy-kcal_100g': 539,
+    'energy-kj_100g': 2252,
+    energy_100g: 2252,
+    fat_100g: 30.9,
+    'saturated-fat_100g': 10.6,
+    carbohydrates_100g: 57.5,
+    sugars_100g: 56.3,
+    proteins_100g: 6.3,
+    salt_100g: 0.107,
+    sodium_100g: 0.0428,
+    'vitamin-c_100g': 0.0024, // 2.4 mg
+    'vitamin-d_100g': 0.0000025, // 2.5 µg
+    calcium_100g: '0.12', // strings occur in the wild
+  },
+};
+
+describe('parseNutriments', () => {
+  it('reads macros and converts units', () => {
+    const n = parseNutriments(spread.nutriments);
+    expect(n.energy).toBe(539);
+    expect(n.protein).toBe(6.3);
+    expect(n.carbs).toBe(57.5);
+    expect(n.fat).toBe(30.9);
+    expect(n.satFat).toBe(10.6);
+    expect(n.sugar).toBe(56.3);
+    expect(n.sodium).toBeCloseTo(42.8);
+    expect(n.vitC).toBeCloseTo(2.4);
+    expect(n.vitD).toBeCloseTo(2.5);
+    expect(n.calcium).toBeCloseTo(120);
+  });
+
+  it('never invents missing nutrients', () => {
+    const n = parseNutriments(spread.nutriments);
+    expect(n.fiber).toBeUndefined();
+    expect(n.iron).toBeUndefined();
+    expect(n.vitB12).toBeUndefined();
+  });
+
+  it('converts kJ when kcal is missing', () => {
+    expect(parseNutriments({ energy_100g: 418.4 }).energy).toBeCloseTo(100);
+    expect(parseNutriments({ 'energy-kj_100g': 836.8 }).energy).toBeCloseTo(200);
+  });
+
+  it('derives sodium from salt only when sodium is missing', () => {
+    expect(parseNutriments({ salt_100g: 1 }).sodium).toBeCloseTo(400);
+    expect(parseNutriments({ salt_100g: 1, sodium_100g: 0.3 }).sodium).toBeCloseTo(300);
+  });
+
+  it('rejects impossible or empty values', () => {
+    const n = parseNutriments({ proteins_100g: 250, fat_100g: -1, sugars_100g: '', 'energy-kcal_100g': 5000 });
+    expect(n.protein).toBeUndefined();
+    expect(n.fat).toBeUndefined();
+    expect(n.sugar).toBeUndefined();
+    expect(n.energy).toBeUndefined();
+  });
+
+  it('keeps reported zeros', () => {
+    expect(parseNutriments({ sugars_100g: 0 }).sugar).toBe(0);
+  });
+});
+
+describe('offProductToFood', () => {
+  it('maps a product', () => {
+    const f = offProductToFood(spread, 1)!;
+    expect(f.name).toBe('Hazelnut cocoa spread');
+    expect(f.brand).toBe('Test Brand');
+    expect(f.barcode).toBe('3017624010701');
+    expect(f.unit).toBe('g');
+    expect(f.servings).toEqual([{ label: '15 g', amount: 15 }]);
+    expect(f.source).toBe('off');
+  });
+
+  it('detects drinks measured in ml', () => {
+    expect(offProductToFood({ code: '1', product_name: 'Juice', quantity: '1 L' })!.unit).toBe('ml');
+    expect(offProductToFood({ code: '1', product_name: 'Cola', nutrition_data_per: '100ml' })!.unit).toBe('ml');
+  });
+
+  it('falls back to a placeholder name', () => {
+    expect(offProductToFood({ code: '123' })!.name).toBe('Product 123');
+    expect(offProductToFood({})).toBeNull();
+  });
+
+  it('ignores nonsense serving sizes', () => {
+    expect(offProductToFood({ code: '1', product_name: 'x', serving_quantity: 0 })!.servings).toEqual([]);
+    expect(offProductToFood({ code: '1', product_name: 'x', serving_quantity: '30', serving_size: '30 g (2 biscuits)' })!.servings).toEqual([
+      { label: '30 g (2 biscuits)', amount: 30 },
+    ]);
+  });
+});
+
+describe('barcodes', () => {
+  it('validates GS1 check digits', () => {
+    expect(isValidGtin('3017624010701')).toBe(true); // EAN-13
+    expect(isValidGtin('3017624010702')).toBe(false);
+    expect(isValidGtin('96385074')).toBe(true); // EAN-8
+    expect(isValidGtin('036000291452')).toBe(true); // UPC-A
+  });
+
+  it('expands UPC-E to UPC-A', () => {
+    expect(upcEToUpcA('04252614')).toBe('042100005264');
+    expect(isValidGtin(upcEToUpcA('04252614')!)).toBe(true);
+    expect(upcEToUpcA('01234565')).toBe('012345000065');
+    expect(upcEToUpcA('12345678')).toBe('123456000078');
+    expect(upcEToUpcA('23456789')).toBeNull(); // number system must be 0 or 1
+  });
+
+  it('builds lookup candidates', () => {
+    expect(barcodeCandidates('036000291452')).toEqual(['036000291452', '0036000291452']);
+    expect(barcodeCandidates('0036000291452')).toContain('036000291452');
+    expect(barcodeCandidates('04252614')).toEqual(['04252614', '042100005264', '0042100005264']);
+  });
+
+  it('normalises typed codes', () => {
+    expect(normaliseBarcode(' 5 000159 484695 ')).toBe('5000159484695');
+    expect(normaliseBarcode('50-00159')).toBe('5000159');
+    expect(normaliseBarcode('abc')).toBeNull();
+    expect(normaliseBarcode('123')).toBeNull();
+  });
+});
