@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useGoBack } from '../../hooks/useGoBack';
 import { Info } from 'lucide-react';
 import { saveProfile } from '../../db/actions';
 import { useProfile, useSettings } from '../../hooks/useData';
@@ -19,7 +19,7 @@ export default function DetailsPage() {
 }
 
 function DetailsForm({ profile }: { profile: Profile }) {
-  const navigate = useNavigate();
+  const goBack = useGoBack();
   const { weightUnit } = useSettings();
   const [name, setName] = useState(profile.name);
   const [sex, setSex] = useState(profile.sex);
@@ -38,7 +38,7 @@ function DetailsForm({ profile }: { profile: Profile }) {
     if (!inRange(weightKg, LIMITS.weightKg)) return setError('Weight looks out of range.');
     if (goalKg !== undefined && !inRange(goalKg, LIMITS.weightKg)) return setError('Goal weight looks out of range.');
     await saveProfile({ name, sex, age, heightCm, weightKg, goalWeightKg: goalKg, activity, objective });
-    navigate(-1);
+    goBack('/profile');
   };
 
   return (

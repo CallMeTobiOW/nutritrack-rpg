@@ -59,8 +59,14 @@ export function Onboarding() {
   };
 
   const onRestore = async (file: File) => {
+    let raw: unknown;
     try {
-      const summary = await restoreBackup(JSON.parse(await file.text()));
+      raw = JSON.parse(await file.text());
+    } catch {
+      return setRestoreMsg('That file could not be read as a backup. Pick the .json file NutriTrack saved.');
+    }
+    try {
+      const summary = await restoreBackup(raw);
       setRestoreMsg(`Restored ${Object.values(summary.counts).reduce((a, b) => a + (b ?? 0), 0)} records.`);
     } catch (e) {
       setRestoreMsg((e as Error).message || 'Could not read that file.');

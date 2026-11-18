@@ -14,6 +14,7 @@ import { Label, NumberInput, TextInput } from '../../components/ui/Field';
 import { Segmented } from '../../components/ui/Segmented';
 import { setPendingFood } from './pendingFood';
 import { per100Problem } from '../../lib/food';
+import { useGoBack } from '../../hooks/useGoBack';
 
 type Basis = '100' | 'serving';
 type Values = Partial<Record<NutrientKey | 'salt', number>>;
@@ -53,6 +54,8 @@ export default function CustomFoodPage() {
   const [showMicros, setShowMicros] = useState(false);
   const [error, setError] = useState('');
   const [loaded, setLoaded] = useState(!editId);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const goBack = useGoBack();
 
   useEffect(() => {
     if (!editId) return;
@@ -100,11 +103,11 @@ export default function CustomFoodPage() {
     if (meal && date && !editId) {
       if (cameFromAdd) {
         setPendingFood(food.id);
-        navigate(-1);
+        goBack(`/food/add?meal=${meal}&date=${date}&food=${food.id}`);
       } else {
         navigate(`/food/add?meal=${meal}&date=${date}&food=${food.id}`, { replace: true });
       }
-    } else navigate(-1);
+    } else goBack('/food');
   };
 
   if (!loaded) return <Page>{null}</Page>;
@@ -186,15 +189,18 @@ export default function CustomFoodPage() {
         <div className="flex gap-2">
           {editId && (
             <Button
-              variant="secondary"
-              className="!px-4 text-danger"
+              variant={confirmDelete ? 'danger' : 'secondary'}
+              className={cn(!confirmDelete && '!px-4 text-danger')}
               aria-label="Delete food"
               onClick={async () => {
+                // First tap arms the button; the second deletes.
+                if (!confirmDelete) return setConfirmDelete(true);
                 await deleteFood(editId);
-                navigate(-1);
+                goBack('/food');
               }}
             >
               <Trash2 size={18} />
+              {confirmDelete && 'Delete food'}
             </Button>
           )}
           <Button variant="primary" size="lg" block onClick={save}>

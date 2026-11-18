@@ -13,6 +13,7 @@ import { Segmented } from '../../components/ui/Segmented';
 import { Icon, QUEST_ICON_CHOICES } from '../../components/ui/Icon';
 
 const DEFAULT_RECURRENCE: Record<QuestCategory, QuestRecurrence> = { daily: 'daily', side: 'daily', weekly: 'weekly', bonus: 'once' };
+const RECURRENCE_LABEL: Record<QuestRecurrence, string> = { daily: 'Daily', weekly: 'Weekly', once: 'One time' };
 
 interface Props {
   open: boolean;
@@ -158,15 +159,18 @@ export function QuestEditor({ open, quest, existing, onClose }: Props) {
           </div>
           <div>
             <Label>Repeats</Label>
-            <Segmented
-              value={form.recurrence}
-              onChange={setRecurrence}
-              options={[
-                { value: 'daily', label: 'Daily' },
-                { value: 'weekly', label: 'Weekly' },
-                { value: 'once', label: 'One time' },
-              ]}
-            />
+            {editing ? (
+              // Locked after creation: changing it would let the same quest pay out again.
+              <p className="text-sm text-muted">
+                <span className="font-semibold text-text">{RECURRENCE_LABEL[form.recurrence]}</span>. To change how often it repeats, add it as a new quest.
+              </p>
+            ) : (
+              <Segmented
+                value={form.recurrence}
+                onChange={setRecurrence}
+                options={(Object.keys(RECURRENCE_LABEL) as QuestRecurrence[]).map((value) => ({ value, label: RECURRENCE_LABEL[value] }))}
+              />
+            )}
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>

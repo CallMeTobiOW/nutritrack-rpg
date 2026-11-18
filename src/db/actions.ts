@@ -91,7 +91,10 @@ export async function updateTargets(patch: Partial<Targets>): Promise<void> {
     const p = (await db.profile.get('me')) ?? defaultProfile();
     const targets = { ...p.targets };
     for (const [k, v] of Object.entries(patch) as [keyof Targets, number][]) {
-      if (Number.isFinite(v) && v >= 0) targets[k] = Math.round(v);
+      if (!Number.isFinite(v)) continue;
+      // Keep targets in a range the rest of the app can work with (no 0 ml water goal, no 99,999 kcal).
+      const r = k === 'calories' ? LIMITS.calories : k === 'waterMl' ? LIMITS.waterGoalMl : LIMITS.targetGrams;
+      targets[k] = clamp(Math.round(v), r.min, r.max);
     }
     // Changing only the water goal must not freeze the calorie and macro
     // targets: they should keep following weight and profile changes.
@@ -456,7 +459,9 @@ export async function updateQuest(id: string, patch: Partial<QuestInput>): Promi
   await withProgression(async () => {
     const q = await db.quests.get(id);
     if (!q) return;
-    await db.quests.put({ ...q, ...cleanQuest({ ...q, ...patch }) });
+    // The repeat setting is fixed once a quest exists: completions are keyed by
+    // period, so switching daily → weekly → one-time would let the same quest pay again.
+    await db.quests.put({ ...q, ...cleanQuest({ ...q, ...patch, recurrence: q.recurrence }) });
   });
 }
 

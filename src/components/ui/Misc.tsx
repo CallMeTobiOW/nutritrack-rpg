@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { ChevronLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { cn } from '../../lib/cn';
+import { useGoBack } from '../../hooks/useGoBack';
 import { IconButton } from './Button';
 
 export function PageHeader({
@@ -16,13 +17,14 @@ export function PageHeader({
   actions?: ReactNode;
 }) {
   const navigate = useNavigate();
+  const goBack = useGoBack();
   return (
     <header className="flex items-end gap-2 pb-4 pt-3">
       {back && (
         <IconButton
           label="Back"
           className="-ml-2 mb-0.5"
-          onClick={() => (typeof back === 'string' ? navigate(back) : window.history.length > 1 ? navigate(-1) : navigate('/'))}
+          onClick={() => (typeof back === 'string' ? navigate(back) : goBack('/'))}
         >
           <ChevronLeft size={24} />
         </IconButton>

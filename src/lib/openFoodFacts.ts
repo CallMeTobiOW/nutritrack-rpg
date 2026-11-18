@@ -158,6 +158,16 @@ export function upcEToUpcA(upce: string): string | null {
   return `${ns}${body}${check}`;
 }
 
+/**
+ * Whether a typed code passes its check digit (EAN-8, UPC-E, UPC-A, EAN-13,
+ * GTIN-14). Catches typos before they open an unrelated product.
+ */
+export function isPlausibleBarcode(code: string): boolean {
+  if (isValidGtin(code)) return true;
+  const upca = code.length === 8 ? upcEToUpcA(code) : null;
+  return !!upca && isValidGtin(upca);
+}
+
 /** Barcode variants worth trying against OFF (OFF stores UPC-A as 13-digit EAN). */
 export function barcodeCandidates(code: string): string[] {
   const out = new Set<string>([code]);

@@ -12,6 +12,7 @@ import {
   saveProfile,
   toggleQuest,
   updateDiaryEntry,
+  updateQuest,
   updateTargets,
   updateWeight,
 } from '../actions';
@@ -198,6 +199,13 @@ describe('profile and weight', () => {
     expect((await db.profile.get('me'))?.goalWeightKg).toBeUndefined();
   });
 
+  it('keeps hand-edited targets within sensible limits', async () => {
+    await updateTargets({ calories: 99999, waterMl: 0 });
+    const t = (await db.profile.get('me'))!.targets;
+    expect(t.calories).toBe(8000);
+    expect(t.waterMl).toBe(500);
+  });
+
   it('keeps calorie targets automatic when only the water goal is changed', async () => {
     await saveProfile({ sex: 'male', age: 30, heightCm: 180, weightKg: 80, activity: 'moderate', objective: 'maintain' }, { onboard: true });
     await updateTargets({ waterMl: 3000 });
@@ -206,6 +214,18 @@ describe('profile and weight', () => {
     expect(p?.customTargets).toBe(false);
     expect(p?.targets.protein).toBe(96); // follows the new weight
     expect(p?.targets.waterMl).toBe(3000); // the chosen water goal is kept
+  });
+});
+
+describe('quest edits', () => {
+  it('keeps the repeat setting fixed so a completed quest cannot pay again', async () => {
+    const q = await questByTitle('Complete a workout');
+    await toggleQuest(q.id, today);
+    const before = await xp();
+    await updateQuest(q.id, { recurrence: 'weekly' });
+    expect((await db.quests.get(q.id))?.recurrence).toBe('daily');
+    expect(await toggleQuest(q.id, today)).toBe(false); // still done today: this unticks
+    expect(await xp()).toBeLessThan(before);
   });
 });
 

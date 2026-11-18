@@ -6,7 +6,7 @@ import { db } from '../../db/db';
 import { addWater, toggleQuest } from '../../db/actions';
 import { briefingById } from '../../db/briefing';
 import { SPEAKERS } from '../../data/briefings';
-import { useAchievementUnlocks, useDayMetrics, usePlayer, usePlayerStats, useProfile } from '../../hooks/useData';
+import { useAchievementUnlocks, useDayMetrics, usePlayer, usePlayerStats, useProfile, useSettings } from '../../hooks/useData';
 import { useToday } from '../../hooks/useToday';
 import { ACHIEVEMENTS, TIER_COLORS } from '../../lib/achievements';
 import { formatLongDate, greetingFor } from '../../lib/dates';
@@ -199,6 +199,8 @@ function QuestsCard() {
 function WaterCard() {
   const today = useToday();
   const profile = useProfile();
+  const { waterQuickAmounts } = useSettings();
+  const quick = waterQuickAmounts.length ? waterQuickAmounts.slice(0, 3) : [250, 500, 750];
   const m = useDayMetrics(today);
   const ml = m?.waterMl ?? 0;
   const p = progress(ml, profile.targets.waterMl);
@@ -232,7 +234,7 @@ function WaterCard() {
         </div>
       </div>
       <div className="mt-3 grid grid-cols-3 gap-2">
-        {[250, 500, 750].map((a) => (
+        {quick.map((a) => (
           <Button key={a} size="sm" variant="secondary" onClick={() => add(a)}>
             +{a} ml
           </Button>
@@ -263,7 +265,7 @@ function BriefingCard() {
         <SpeakerEmblem category={b.category} size={40} />
         <div className="min-w-0">
           <p className="text-[15px] leading-relaxed">“{b.text}”</p>
-          <p className="mt-1.5 text-xs font-semibold" style={{ color: speaker.accent }}>
+          <p className="mt-1.5 text-xs font-semibold" style={{ color: speaker.ink }}>
             {speaker.name}
           </p>
         </div>

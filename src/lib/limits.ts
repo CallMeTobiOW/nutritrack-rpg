@@ -10,6 +10,8 @@ export const LIMITS = {
   heightCm: { min: 100, max: 250 },
   age: { min: 13, max: 100 },
   calories: { min: 800, max: 8000 },
+  waterGoalMl: { min: 500, max: 6000 },
+  targetGrams: { min: 0, max: 1000 }, // macro, fibre, sugar and sat-fat targets
 } as const;
 
 export function clamp(n: number, min: number, max: number): number {

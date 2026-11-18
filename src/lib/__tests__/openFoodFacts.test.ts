@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   RETRY_DELAYS_MS,
   barcodeCandidates,
+  isPlausibleBarcode,
   isValidGtin,
   normaliseBarcode,
   offProductToFood,
@@ -9,6 +10,15 @@ import {
   searchProducts,
   upcEToUpcA,
 } from '../openFoodFacts';
+
+describe('typed barcodes', () => {
+  it('accepts real codes and rejects a wrong check digit', () => {
+    expect(isPlausibleBarcode('5449000000996')).toBe(true); // EAN-13
+    expect(isPlausibleBarcode('3017620422003')).toBe(true);
+    expect(isPlausibleBarcode('1234567890123')).toBe(false);
+    expect(isPlausibleBarcode('5449000000997')).toBe(false);
+  });
+});
 
 describe('busy service', () => {
   afterEach(() => vi.unstubAllGlobals());

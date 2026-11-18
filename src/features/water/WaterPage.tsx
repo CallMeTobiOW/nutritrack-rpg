@@ -246,7 +246,7 @@ function WaterHistory({ end, goal }: { end: DateKey; goal: number }) {
           <BarChart data={data} margin={{ top: 8, right: 4, bottom: 0, left: -14 }} barCategoryGap={n === 7 ? '28%' : '12%'}>
             <CartesianGrid stroke={GRID_STROKE} vertical={false} />
             <XAxis dataKey="label" tick={AXIS_TICK} tickLine={false} axisLine={false} interval="preserveStartEnd" minTickGap={14} />
-            <YAxis tick={AXIS_TICK} tickLine={false} axisLine={false} domain={[0, top]} ticks={ticks} tickFormatter={(v: number) => (v === 0 ? '0' : `${v / 1000}L`)} />
+            <YAxis tick={AXIS_TICK} tickLine={false} axisLine={false} domain={[0, top]} ticks={ticks} interval={0} tickFormatter={(v: number) => (v === 0 ? '0' : `${v / 1000}L`)} />
             <ReferenceLine y={goal} stroke="var(--muted)" strokeDasharray="4 4" />
             <Tooltip
               cursor={{ fill: 'var(--surface-3)', opacity: 0.5 }}
