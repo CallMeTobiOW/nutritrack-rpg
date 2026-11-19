@@ -37,6 +37,73 @@
         if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
       } catch (e) {}
     </script>
+    <script>
+      // Boot watchdog. If the app fails to start (a script that won't load or
+      // throws before React mounts), show what went wrong with a way to recover
+      // instead of a blank screen. Plain ES5 and inline styles on purpose, so it
+      // still works when the app's own JavaScript or CSS is what failed.
+      (function () {
+        var errors = [];
+        var shown = false;
+        function describe(e) {
+          if (!e) return 'Unknown error';
+          if (e.message) return e.message + (e.filename ? ' (' + e.filename.split('/').pop() + ':' + e.lineno + ')' : '');
+          if (e.target && e.target.src) return 'Could not load ' + e.target.src.split('/').pop();
+          if (e.reason) return String((e.reason && e.reason.message) || e.reason);
+          return String(e);
+        }
+        function mounted() {
+          var root = document.getElementById('root');
+          return !!(root && root.childElementCount > 0);
+        }
+        // Clears the offline cache and service worker, then reloads. Saved data
+        // (IndexedDB) is never touched.
+        window.__ntRepair = function () {
+          var jobs = [];
+          try {
+            if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) {
+              jobs.push(navigator.serviceWorker.getRegistrations().then(function (regs) {
+                return Promise.all(regs.map(function (r) { return r.unregister(); }));
+              }));
+            }
+            if (window.caches && caches.keys) {
+              jobs.push(caches.keys().then(function (keys) {
+                return Promise.all(keys.map(function (k) { return caches.delete(k); }));
+              }));
+            }
+          } catch (e) {}
+          Promise.all(jobs).catch(function () {}).then(function () { location.reload(); });
+        };
+        window.__ntShowBootError = function (detail) {
+          if (shown) return;
+          shown = true;
+          var box = document.createElement('div');
+          box.id = 'boot-error';
+          box.setAttribute('role', 'alert');
+          box.style.cssText = 'position:fixed;inset:0;z-index:2147483647;overflow:auto;background:#070a12;color:#e9eef8;font:15px/1.5 -apple-system,system-ui,sans-serif;padding:calc(env(safe-area-inset-top) + 48px) 24px 32px;text-align:center';
+          var btn = 'display:block;width:100%;max-width:320px;margin:12px auto 0;padding:14px;border-radius:14px;font:600 16px -apple-system,system-ui,sans-serif;border:1px solid #38bdf8;';
+          box.innerHTML =
+            '<p style="font-weight:700;letter-spacing:.2em;font-size:22px;margin:0">NUTRITRACK</p>' +
+            '<p style="margin:16px auto 0;max-width:320px">The app could not start. Your saved data is safe on this phone.</p>' +
+            '<button type="button" data-act="repair" style="' + btn + 'background:#38bdf8;color:#070a12">Repair and reload</button>' +
+            '<button type="button" data-act="reload" style="' + btn + 'background:transparent;color:#e9eef8">Reload</button>' +
+            '<p style="margin:24px auto 0;max-width:340px;font-size:12px;color:#95a1b8">If this keeps happening, take a screenshot of this screen. The details below show what went wrong.</p>' +
+            '<pre style="margin:8px auto 0;max-width:340px;white-space:pre-wrap;word-break:break-word;text-align:left;font-size:11px;color:#95a1b8;background:rgba(255,255,255,.04);padding:10px;border-radius:10px"></pre>';
+          box.querySelector('pre').textContent = (detail || errors.join('\n') || 'The app did not finish loading.') + '\n\n' + navigator.userAgent;
+          box.querySelector('[data-act=repair]').onclick = window.__ntRepair;
+          box.querySelector('[data-act=reload]').onclick = function () { location.reload(); };
+          (document.body || document.documentElement).appendChild(box);
+        };
+        function onError(e) {
+          errors.push(describe(e));
+          // Only take over if the app never managed to render anything.
+          setTimeout(function () { if (!mounted()) window.__ntShowBootError(); }, 1500);
+        }
+        window.addEventListener('error', onError, true); // capture: also catches failed <script> loads
+        window.addEventListener('unhandledrejection', onError);
+        setTimeout(function () { if (!mounted()) window.__ntShowBootError(); }, 12000);
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
