@@ -24,7 +24,7 @@ export interface Serving {
   amount: number; // g or ml
 }
 
-export type FoodSource = 'off' | 'custom';
+export type FoodSource = 'off' | 'custom' | 'generic';
 
 export type NutriScore = 'a' | 'b' | 'c' | 'd' | 'e';
 

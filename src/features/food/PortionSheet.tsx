@@ -170,7 +170,13 @@ export function PortionSheet({ target, date, meal: initialMeal, onClose, onDone,
     >
       <div ref={bodyRef} className="space-y-4 pt-1">
         <div className="flex flex-wrap items-center gap-2">
-          {isOff ? <Chip color="var(--primary)">Open Food Facts</Chip> : <Chip color="var(--violet)">Custom food</Chip>}
+          {isOff ? (
+            <Chip color="var(--primary)">Open Food Facts</Chip>
+          ) : target.mode === 'add' && target.food.source === 'generic' ? (
+            <Chip color="var(--success)">Everyday food · typical values</Chip>
+          ) : (
+            <Chip color="var(--violet)">Custom food</Chip>
+          )}
           {food.barcode && <span className="text-xs text-faint tabular">{food.barcode}</span>}
           <span className="flex-1" />
           {saved && (

@@ -31,11 +31,30 @@ describe('busy service', () => {
   const ok = { ok: true, status: 200, json: async () => ({ products: [{ code: '1', product_name: 'Banana', nutriments: { 'energy-kcal_100g': 89 } }] }) };
   const busy = { ok: false, status: 503, json: async () => ({}) };
 
-  it('retries a 503 and then succeeds', async () => {
-    const fetch = vi.fn().mockResolvedValueOnce(busy).mockRejectedValueOnce(new TypeError('Failed to fetch')).mockResolvedValueOnce(ok);
-    vi.stubGlobal('fetch', fetch);
+  it('shows a product found by both searches once', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(ok));
     const results = await searchProducts('banana');
-    expect(fetch).toHaveBeenCalledTimes(3);
+    expect(results[0]?.name).toBe('Banana');
+    expect(results).toHaveLength(1);
+  });
+
+  it('asks for UK products first and the world second', async () => {
+    const uk = { ok: true, status: 200, json: async () => ({ products: [{ code: '5', product_name: 'UK Oranges', nutriments: { 'energy-kcal_100g': 37 } }] }) };
+    const world = { ok: true, status: 200, json: async () => ({ products: [{ code: '9', product_name: 'Italian Oranges', nutriments: { 'energy-kcal_100g': 40 } }, { code: '5', product_name: 'UK Oranges', nutriments: { 'energy-kcal_100g': 37 } }] }) };
+    const urls: string[] = [];
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(async (url: string) => {
+      urls.push(String(url));
+      return String(url).includes('united-kingdom') ? uk : world;
+    }));
+    const results = await searchProducts('orange');
+    expect(results.map((r) => r.name)).toEqual(['UK Oranges', 'Italian Oranges']);
+    expect(urls.filter((u) => u.includes('tag_0=united-kingdom'))).toHaveLength(1);
+    expect(urls).toHaveLength(2);
+  });
+
+  it('still answers when only one of the two searches works', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(async (url: string) => (String(url).includes('united-kingdom') ? busy : ok)));
+    const results = await searchProducts('banana');
     expect(results[0]?.name).toBe('Banana');
   });
 
