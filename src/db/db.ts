@@ -8,6 +8,7 @@ import Dexie, { type EntityTable } from 'dexie';
 import type {
   AchievementUnlock,
   BriefingRecord,
+  RankMatchRecord,
   DiaryEntry,
   Food,
   Profile,
@@ -31,6 +32,7 @@ export class NutriTrackDB extends Dexie {
   xpEvents!: EntityTable<XpEvent, 'id'>;
   achievements!: EntityTable<AchievementUnlock, 'id'>;
   briefings!: EntityTable<BriefingRecord, 'date'>;
+  rankMatches!: EntityTable<RankMatchRecord, 'date'>;
 
   constructor(name = 'nutritrack-rpg') {
     super(name);
@@ -47,6 +49,8 @@ export class NutriTrackDB extends Dexie {
       achievements: 'id, unlockedAt',
       briefings: 'date',
     });
+    // v2: competitive rank matches (one locked result per day).
+    this.version(2).stores({ rankMatches: 'date' });
   }
 }
 
@@ -64,6 +68,7 @@ export const ALL_TABLES = [
   'xpEvents',
   'achievements',
   'briefings',
+  'rankMatches',
 ] as const;
 
 export type TableName = (typeof ALL_TABLES)[number];
