@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '../db';
 import { addDiaryEntries, addDiaryEntry, ensureInitialized, saveCustomFood, saveOffFood } from '../actions';
 import { STALE_AFTER_MS, addPendingScan, findSavedFood, needsRefresh, resolveBarcode, retryPendingScans, sameProduct } from '../scans';
-import { RETRY_DELAYS_MS } from '../../lib/openFoodFacts';
+import { QUALITY_VERSION, RETRY_DELAYS_MS } from '../../lib/openFoodFacts';
 import { defaultPortion, portionOptions, presetPortion } from '../../lib/food';
 import type { Food } from '../../lib/models';
 
@@ -44,7 +44,7 @@ describe('resolveBarcode', () => {
     expect(r.kind).toBe('found');
     if (r.kind !== 'found') return;
     expect(r.from).toBe('online');
-    expect(r.food.quality).toEqual({ nutriScore: 'a', nova: 3 });
+    expect(r.food.quality).toMatchObject({ nutriScore: 'a', nova: 3, v: QUALITY_VERSION });
     expect(r.food.lastScannedAt).toBeTypeOf('number');
     expect(r.food.servings.map((s) => s.label)).toEqual(['1/2 can (207 g)', 'Whole pack (415 g)']);
 
@@ -98,7 +98,7 @@ describe('resolveBarcode', () => {
 });
 
 describe('refreshing downloaded products', () => {
-  const base: Omit<Food, 'id'> = { name: 'Beans', barcode: BEANS, source: 'off', unit: 'g', per100: { energy: 78 }, servings: [], favorite: false, useCount: 0, createdAt: 0, updatedAt: 0 };
+  const base: Omit<Food, 'id'> = { name: 'Beans', barcode: BEANS, source: 'off', unit: 'g', per100: { energy: 78 }, servings: [], favorite: false, useCount: 0, createdAt: 0, updatedAt: 0, quality: { v: QUALITY_VERSION } };
 
   it('only refreshes old, unedited downloads', () => {
     const now = 10 * STALE_AFTER_MS;
@@ -108,15 +108,21 @@ describe('refreshing downloaded products', () => {
     expect(needsRefresh({ ...base, id: 'a', source: 'custom', fetchedAt: 0 }, now)).toBe(false);
   });
 
+  it('refreshes products saved by an older app version straight away, even corrected ones (scores only)', () => {
+    const now = 10 * STALE_AFTER_MS;
+    expect(needsRefresh({ ...base, id: 'a', fetchedAt: now, quality: undefined }, now)).toBe(true);
+    expect(needsRefresh({ ...base, id: 'a', fetchedAt: now, edited: true, quality: { v: QUALITY_VERSION - 1 } }, now)).toBe(true);
+  });
+
   it('never overwrites values the player corrected', async () => {
     const saved = await saveOffFood(base);
     const fixed = await saveCustomFood({ name: 'Beans (fixed)', unit: 'g', per100: { energy: 80, protein: 5 }, servings: [], barcode: BEANS }, saved.id);
     expect(fixed.edited).toBe(true);
     expect(fixed.source).toBe('off');
-    const refreshed = await saveOffFood({ ...base, per100: { energy: 1 }, quality: { nutriScore: 'a' } });
+    const refreshed = await saveOffFood({ ...base, per100: { energy: 1 }, quality: { nutriScore: 'a', additives: ['e330'] } });
     expect(refreshed.per100).toEqual({ energy: 80, protein: 5 });
     expect(refreshed.name).toBe('Beans (fixed)');
-    expect(refreshed.quality).toEqual({ nutriScore: 'a' });
+    expect(refreshed.quality).toEqual({ nutriScore: 'a', additives: ['e330'] });
   });
 });
 

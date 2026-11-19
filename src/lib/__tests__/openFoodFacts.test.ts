@@ -9,6 +9,7 @@ import {
   normaliseBarcode,
   offProductToFood,
   parseNutriments,
+  QUALITY_VERSION,
   parseQuality,
   parseServings,
   searchProducts,
@@ -201,12 +202,27 @@ describe('portions and quality from Open Food Facts', () => {
 
   it('reads Nutri-Score, NOVA, completeness and alcohol', () => {
     expect(parseQuality({ nutriscore_grade: 'B', nova_group: '4', states_tags: ['en:nutrition-facts-to-be-completed'], nutriments: { alcohol_100g: 5 } })).toEqual({
+      v: QUALITY_VERSION,
       nutriScore: 'b',
       nova: 4,
       incomplete: true,
       alcohol: 5,
     });
-    expect(parseQuality({ nutriscore_grade: 'unknown', nova_group: 9 })).toBeUndefined();
+    expect(parseQuality({ nutriscore_grade: 'unknown', nova_group: 9 })).toEqual({ v: QUALITY_VERSION });
+  });
+
+  it('reads additives (only once ingredients are analysed), fruit/veg share and categories', () => {
+    const q = parseQuality({
+      additives_n: 3,
+      additives_tags: ['en:e129', 'en:e330', 'en:e129', 'en:not-an-additive'],
+      categories_tags: ['en:snacks', 'en:sweet-snacks', 'en:confectioneries', 'en:candies', 'en:gummies', 'fr:bonbons'],
+      nutriments: { 'fruits-vegetables-legumes-estimate-from-ingredients_100g': 12 },
+    });
+    expect(q.additives).toEqual(['e129', 'e330']);
+    expect(q.categories).toEqual(['en:sweet-snacks', 'en:confectioneries', 'en:candies', 'en:gummies']);
+    expect(q.fruitVeg).toBe(12);
+    expect(parseQuality({}).additives).toBeUndefined();
+    expect(parseQuality({ additives_n: 0, additives_tags: [] }).additives).toEqual([]);
   });
 
   it('prefers the English product name', () => {
