@@ -3,6 +3,7 @@
  * IndexedDB (see src/db/db.ts). All weights are kg, volumes ml, amounts g/ml.
  */
 import type { DateKey } from './dates';
+import type { ScoredGoal } from './rank';
 import type { NutrientKey, NutrientValues } from './nutrients';
 import type { MeasureUnit } from './nutrition';
 import type { ActivityLevel, Objective, Targets } from './targets';
@@ -194,4 +195,21 @@ export interface Settings {
   lastBackupAt?: number;
   /** Highest level reached, so a level-up is celebrated only the first time. */
   highestLevel?: number;
+  /** First day of competitive rank matches (set the first time the app syncs with rank support). */
+  rankSeasonStart?: DateKey;
+  /**
+   * The ladder step the player last saw celebrated (-1 while in placements),
+   * so a rank change is shown once, even when it happens while the app is closed.
+   */
+  rankSeenStep?: number;
+}
+
+/** A locked competitive-rank match: one calendar day's result. Never edited once written. */
+export interface RankMatchRecord {
+  date: DateKey;
+  /** 0–100. */
+  score: number;
+  /** Goals hit that day (keys of GoalFlags). */
+  goals: ScoredGoal[];
+  lockedAt: number;
 }

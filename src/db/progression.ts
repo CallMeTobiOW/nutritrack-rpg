@@ -10,9 +10,11 @@
 import { ACHIEVEMENTS, newlyUnlocked, type AchievementDef } from '../lib/achievements';
 import { celebrate } from '../lib/celebrations';
 import { toDateKey, toWeekKey, type DateKey } from '../lib/dates';
-import type { XpEvent } from '../lib/models';
+import type { RankMatchRecord, XpEvent } from '../lib/models';
 import { achievementEventId, computeDayMetrics, reconcileQuests } from '../lib/quests';
 import { computePlayerStats, totalXp } from '../lib/stats';
+import { datesToLock, replayMatches, scoreDay, seenStep } from '../lib/rank';
+import { dayMetricsFor } from '../lib/stats';
 import { levelFromXp, rankTitle } from '../lib/xp';
 import { db } from './db';
 import { DEFAULT_SETTINGS, defaultProfile } from './defaults';
@@ -24,7 +26,7 @@ export interface SyncReport {
   unlocked: AchievementDef[];
 }
 
-const PROGRESSION_TABLES = ['profile', 'settings', 'quests', 'diary', 'water', 'weights', 'xpEvents', 'achievements', 'foods'] as const;
+const PROGRESSION_TABLES = ['profile', 'settings', 'quests', 'diary', 'water', 'weights', 'xpEvents', 'achievements', 'foods', 'rankMatches'] as const;
 
 async function syncNow(today: DateKey, now = Date.now()): Promise<SyncReport> {
   return db.transaction('rw', PROGRESSION_TABLES.map((t) => db[t]), async () => {
@@ -87,6 +89,9 @@ async function syncNow(today: DateKey, now = Date.now()): Promise<SyncReport> {
       }
     }
 
+    // 3. Competitive rank: lock every finished day that isn't locked yet.
+    await lockRankMatches(today, now, diary, water, weights, targets);
+
     return {
       completed: add.filter((e) => e.kind === 'quest'),
       uncompleted: remove,
@@ -94,6 +99,34 @@ async function syncNow(today: DateKey, now = Date.now()): Promise<SyncReport> {
       unlocked,
     };
   });
+}
+
+/**
+ * Lock rank matches for days that have finished their grace period. A locked
+ * result is never rewritten, so editing old days can't change your rank.
+ * Days with nothing logged lock as a score of 0 (a defeat), by design.
+ */
+async function lockRankMatches(
+  today: DateKey,
+  now: number,
+  diary: Parameters<typeof dayMetricsFor>[1],
+  water: Parameters<typeof dayMetricsFor>[2],
+  weights: Parameters<typeof dayMetricsFor>[3],
+  targets: Parameters<typeof scoreDay>[1],
+): Promise<void> {
+  const settings = (await db.settings.get('settings')) ?? DEFAULT_SETTINGS;
+  const existing = await db.rankMatches.toArray();
+  if (!settings.rankSeasonStart) {
+    await db.settings.put({ ...settings, rankSeasonStart: today, rankSeenStep: seenStep(replayMatches(existing).state) });
+    return;
+  }
+  let lastLocked: DateKey | null = null;
+  for (const m of existing) if (!lastLocked || m.date > lastLocked) lastLocked = m.date;
+  const dates = datesToLock(settings.rankSeasonStart, lastLocked, today);
+  if (dates.length === 0) return;
+  const metrics = dayMetricsFor(dates, diary, water, weights);
+  const rows: RankMatchRecord[] = dates.map((d) => ({ ...scoreDay(metrics.get(d)!, targets), lockedAt: now }));
+  await db.rankMatches.bulkPut(rows);
 }
 
 async function currentLevel(): Promise<number> {

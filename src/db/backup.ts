@@ -50,6 +50,7 @@ const KEY_FIELD: Record<TableName, string> = {
   xpEvents: 'id',
   achievements: 'id',
   briefings: 'date',
+  rankMatches: 'date',
 };
 
 type Row = Record<string, unknown>;
@@ -76,6 +77,7 @@ const ROW_CHECKS: Record<TableName, (r: Row) => boolean> = {
   xpEvents: (r) => isDay(r.date) && isNum(r.xp) && isStr(r.period),
   achievements: (r) => isDay(r.date),
   briefings: (r) => isDay(r.date),
+  rankMatches: (r) => isDay(r.date) && isNum(r.score) && (r.score as number) >= 0 && (r.score as number) <= 100 && Array.isArray(r.goals),
 };
 
 /** Validate the structure of a parsed backup. Throws BackupError with a readable message. */
