@@ -75,12 +75,9 @@ export interface PlayerSummary {
 /** Level, XP and streak for the HUD. */
 export function usePlayer(today: DateKey): PlayerSummary | undefined {
   const data = useLiveQuery(async () => {
-    const [events, diaryDates, water] = await Promise.all([
-      db.xpEvents.toArray(),
-      db.diary.orderBy('date').uniqueKeys(),
-      db.water.toArray(),
-    ]);
-    return { events, diaryDates: diaryDates as string[], water };
+    // Plain getAll reads only: iOS Safari can fail key cursors ("Unable to open cursor").
+    const [events, diary, water] = await Promise.all([db.xpEvents.toArray(), db.diary.toArray(), db.water.toArray()]);
+    return { events, diaryDates: [...new Set(diary.map((e) => e.date))], water };
   }, []);
   return useMemo(() => {
     if (!data) return undefined;
