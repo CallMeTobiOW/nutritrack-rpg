@@ -354,9 +354,18 @@ function assertWeightInRange(kg: number): void {
   }
 }
 
+/**
+ * Last item of an already-sorted list. Used instead of Dexie's `.last()`,
+ * which opens a reverse cursor; iOS Safari can fail cursors with
+ * "UnknownError: Unable to open cursor", while plain getAll reads work.
+ */
+function lastOf<T>(list: T[]): T | undefined {
+  return list[list.length - 1];
+}
+
 /** Keep the profile weight (and suggested targets) in step with the most recent weigh-in. */
 async function syncProfileWeight(): Promise<void> {
-  const latest = await db.weights.orderBy('date').last();
+  const latest = lastOf(await db.weights.orderBy('date').toArray());
   const p = await db.profile.get('me');
   if (!p || !latest || latest.kg === p.weightKg) return;
   const next = { ...p, weightKg: latest.kg, updatedAt: Date.now() };
@@ -442,7 +451,7 @@ function cleanQuest(input: QuestInput): QuestInput {
 
 export async function createQuest(input: QuestInput): Promise<Quest> {
   return withProgression(async () => {
-    const last = await db.quests.orderBy('order').last();
+    const last = lastOf(await db.quests.orderBy('order').toArray());
     const q: Quest = { ...cleanQuest(input), id: uid(), order: (last?.order ?? 0) + 1, createdAt: Date.now() };
     await db.quests.put(q);
     return q;

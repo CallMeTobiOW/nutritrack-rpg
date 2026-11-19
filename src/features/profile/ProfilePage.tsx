@@ -28,8 +28,8 @@ export default function ProfilePage() {
   const { weightUnit } = useSettings();
 
   const loggedLast30 = useLiveQuery(async () => {
-    const keys = await db.diary.where('date').between(addDays(today, -29), today, true, true).keys();
-    return new Set(keys as string[]).size;
+    const entries = await db.diary.where('date').between(addDays(today, -29), today, true, true).toArray();
+    return new Set(entries.map((e) => e.date)).size;
   }, [today]);
   const firstDay = useLiveQuery(async () => (await db.diary.orderBy('date').first())?.date, []);
 
