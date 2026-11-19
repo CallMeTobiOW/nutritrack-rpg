@@ -3,6 +3,7 @@ import { AlertTriangle, ChevronDown, ExternalLink, Heart, Pencil, Trash2 } from 
 import { useNavigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../db/db';
+import { supermarketsOf } from '../../data/supermarkets';
 import { addDiaryEntry, deleteDiaryEntry, saveOffFood, toggleFavorite, updateDiaryEntry } from '../../db/actions';
 import type { DateKey } from '../../lib/dates';
 import { nutrientsFor, portionOptions, presetPortion, round, servingText } from '../../lib/food';
@@ -133,6 +134,7 @@ export function PortionSheet({ target, date, meal: initialMeal, onClose, onDone,
     onClose();
   };
 
+  const shops = supermarketsOf({ brand: food.brand, stores: target.mode === 'add' ? target.food.stores : undefined });
   const isOff = target.mode === 'edit' ? !!food.barcode : target.food.source === 'off';
   const issues = target.mode === 'edit' ? [] : qualityIssues(current);
 
@@ -178,6 +180,7 @@ export function PortionSheet({ target, date, meal: initialMeal, onClose, onDone,
             <Chip color="var(--violet)">Custom food</Chip>
           )}
           {food.barcode && <span className="text-xs text-faint tabular">{food.barcode}</span>}
+          {shops.length > 0 && <span className="text-xs text-muted">Sold at {shops.map((m) => m.label).join(', ')}</span>}
           <span className="flex-1" />
           {saved && (
             <IconButton label="Edit food" onClick={() => navigate(`/food/custom?id=${saved.id}`)}>

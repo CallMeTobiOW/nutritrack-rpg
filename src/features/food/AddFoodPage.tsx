@@ -8,8 +8,9 @@ import { useToday } from '../../hooks/useToday';
 import { useGoBack } from '../../hooks/useGoBack';
 import { defaultPortionKcal, isMealSlot, mealForTime } from '../../lib/food';
 import { MEAL_LABELS, MEAL_SLOTS, type Food, type MealSlot, type SavedMeal } from '../../lib/models';
-import { OffError, isPlausibleBarcode, lookupBarcode, normaliseBarcode, searchProducts } from '../../lib/openFoodFacts';
+import { OffError, isPlausibleBarcode, lookupBarcode, normaliseBarcode, searchProducts, searchShop } from '../../lib/openFoodFacts';
 import { GENERIC_FOODS } from '../../data/genericFoods';
+import { SUPERMARKETS, type Supermarket } from '../../data/supermarkets';
 import { correctQuery, rankFoods, vocabularyOf } from '../../lib/foodSearch';
 import { cn } from '../../lib/cn';
 import { Page } from '../../components/layout/Page';
@@ -39,6 +40,7 @@ export default function AddFoodPage() {
   const initialMeal = useMealParam();
   const [meal, setMeal] = useState<MealSlot>(initialMeal);
   const [tab, setTab] = useState<Tab>('recent');
+  const [shop, setShop] = useState<Supermarket | null>(null);
   const [query, setQuery] = useState('');
   const [remote, setRemote] = useState<NewFood[] | null>(null);
   const [remoteState, setRemoteState] = useState<'idle' | 'loading' | 'error'>('idle');
@@ -95,9 +97,9 @@ export default function AddFoodPage() {
     return rankFoods(corrected ?? query, fresh, 40);
   }, [remote, local, query, corrected]);
 
-  const runRemote = async () => {
+  const runRemote = async (forShop: Supermarket | null = shop) => {
     const q = query.trim();
-    if (q.length < 2) return;
+    if (q.length < 2 && !forShop) return;
     abortRef.current?.abort();
     const ctrl = new AbortController();
     abortRef.current = ctrl;
@@ -105,8 +107,10 @@ export default function AddFoodPage() {
     setRemote(null);
     try {
       // A typed barcode goes straight to that product.
-      const code = normaliseBarcode(q);
-      if (code && isPlausibleBarcode(code)) {
+      const code = forShop ? null : normaliseBarcode(q);
+      if (forShop) {
+        setRemote(await searchShop(forShop, corrected ?? q, ctrl.signal));
+      } else if (code && isPlausibleBarcode(code)) {
         const found = await lookupBarcode(code, ctrl.signal);
         setRemote(found ? [found] : []);
       } else {
@@ -188,7 +192,32 @@ export default function AddFoodPage() {
         </Button>
       </div>
 
-      {!query && (
+      <div className="-mx-4 mb-3 overflow-x-auto px-4 pb-1" aria-label="Supermarkets">
+        <div className="flex gap-1.5">
+          {SUPERMARKETS.map((m) => (
+            <button
+              key={m.id}
+              type="button"
+              aria-pressed={shop?.id === m.id}
+              onClick={() => {
+                const next = shop?.id === m.id ? null : m;
+                setShop(next);
+                setRemote(null);
+                setRemoteState('idle');
+                if (next) void runRemote(next);
+              }}
+              className={cn(
+                'min-h-11 shrink-0 rounded-full border px-4 text-sm font-semibold transition',
+                shop?.id === m.id ? 'border-primary bg-primary/15 text-text' : 'border-line text-muted',
+              )}
+            >
+              {m.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {!query && !shop && (
         <Segmented
           className="mb-3"
           size="sm"
@@ -212,7 +241,7 @@ export default function AddFoodPage() {
         <p className="hud-label mb-2">Everyday and saved foods</p>
       )}
 
-      {tab === 'meals' && !query ? (
+      {shop && !query ? null : tab === 'meals' && !query ? (
         <MealList meals={meals ?? []} onOpen={setMealDetail} />
       ) : (
         <FoodList
@@ -230,12 +259,12 @@ export default function AddFoodPage() {
         />
       )}
 
-      {query && (
+      {(query || shop) && (
         <div className="mt-5">
           <div className="mb-2 flex items-center justify-between">
-            {!nothingFound && <p className="hud-label">Open Food Facts</p>}
+            {!nothingFound && <p className="hud-label">{shop ? `${shop.label} · Open Food Facts` : 'Open Food Facts'}</p>}
             {remoteState !== 'loading' && remote === null && (
-              <Button size="sm" variant="secondary" onClick={() => void runRemote()} disabled={query.trim().length < 2}>
+              <Button size="sm" variant="secondary" onClick={() => void runRemote()} disabled={query.trim().length < 2 && !shop}>
                 <Globe size={16} /> Search online
               </Button>
             )}

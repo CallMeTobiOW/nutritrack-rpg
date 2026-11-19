@@ -61,6 +61,8 @@ export interface Food {
   brand?: string;
   barcode?: string;
   imageUrl?: string;
+  /** Shops that sell it, as listed on Open Food Facts. */
+  stores?: string[];
   source: FoodSource;
   unit: MeasureUnit;
   /** Per 100 g / 100 ml. Missing keys = unknown. */

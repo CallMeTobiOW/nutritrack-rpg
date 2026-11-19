@@ -175,6 +175,7 @@ export async function saveOffFood(food: Omit<Food, 'id'>, opts: { scanned?: bool
         name: food.name,
         brand: food.brand,
         imageUrl: food.imageUrl ?? existing.imageUrl,
+        stores: food.stores ?? existing.stores,
         unit: food.unit,
         per100: food.per100,
         servings: food.servings.length ? food.servings : existing.servings,
