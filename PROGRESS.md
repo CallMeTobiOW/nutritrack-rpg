@@ -82,3 +82,8 @@ Version 0.1.0 — all ten build phases complete. Built and tested in the cloud; 
 ## Ideas for later
 
 - Playwright end-to-end tests inside the repo (the click-through script lives outside it for now).
+
+## v0.8.0 — Better food search and UK supermarkets (2026-11-19)
+- Search ranking (`src/lib/foodSearch.ts`): plain foods before flavoured products, plurals, typos, half-typed words; 70 bundled everyday UK foods (`src/data/genericFoods.ts`); UK-first online search; typed barcode goes straight to the product; "Nothing found" card with one-tap custom food.
+- Supermarkets (`src/data/supermarkets.ts`): scanned/searched products show "Tesco own brand" / "Sold at …" from Open Food Facts brand and store data. Not verified against live Open Food Facts (cloud blocked); check on the phone.
+- GS1 UK lookups and supermarket sites/apps are deliberately not used (terms).

@@ -43,7 +43,7 @@ export default function CustomFoodPage() {
   // The scanner replaces itself with this page; the add screen pushes it.
   const cameFromAdd = !params.get('barcode');
 
-  const [name, setName] = useState('');
+  const [name, setName] = useState(params.get('name') ?? '');
   const [brand, setBrand] = useState('');
   const [barcode, setBarcode] = useState(params.get('barcode') ?? '');
   const [unit, setUnit] = useState<MeasureUnit>('g');

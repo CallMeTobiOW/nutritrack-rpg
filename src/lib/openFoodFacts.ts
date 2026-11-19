@@ -26,6 +26,7 @@ const FIELDS = [
   'generic_name',
   'generic_name_en',
   'brands',
+  'stores',
   'image_front_small_url',
   'image_front_url',
   'image_url',
@@ -60,6 +61,7 @@ export interface OffProduct {
   generic_name?: string;
   generic_name_en?: string;
   brands?: string;
+  stores?: string;
   image_front_small_url?: string;
   image_front_url?: string;
   image_url?: string;
@@ -205,6 +207,12 @@ function cleanName(p: OffProduct): string {
   return (p.product_name_en || p.product_name || p.generic_name_en || p.generic_name || '').replace(/\s+/g, ' ').trim();
 }
 
+/** "Tesco, Aldi" → ["Tesco", "Aldi"]. Undefined when Open Food Facts lists none. */
+export function parseStores(text: string | undefined): string[] | undefined {
+  const list = [...new Set((text ?? '').split(',').map((t) => t.trim()).filter(Boolean))].slice(0, 12);
+  return list.length ? list : undefined;
+}
+
 export function offProductToFood(p: OffProduct, now = Date.now()): Omit<Food, 'id'> | null {
   const name = cleanName(p);
   if (!name && !p.code) return null;
@@ -214,6 +222,7 @@ export function offProductToFood(p: OffProduct, now = Date.now()): Omit<Food, 'i
     name: name || `Product ${p.code}`,
     brand: p.brands?.split(',')[0]?.trim() || undefined,
     barcode: p.code,
+    stores: parseStores(p.stores),
     imageUrl: p.image_front_small_url || p.image_front_url || p.image_url || undefined,
     source: 'off',
     unit,
@@ -361,16 +370,47 @@ export async function lookupBarcode(code: string, signal?: AbortSignal): Promise
   return null;
 }
 
+/** A product search URL; `extra` adds filters such as UK_ONLY. */
+function searchUrl(q: string, extra: string): string {
+  return (
+    `${BASE}/cgi/search.pl?action=process&json=1&search_simple=1&page_size=40&sort_by=unique_scans_n&lc=en&${APP_ID}` +
+    `&search_terms=${encodeURIComponent(q)}${extra}&fields=${FIELDS}`
+  );
+}
+
+/** Only products sold in the UK (Open Food Facts country filter). */
+const UK_ONLY = '&tagtype_0=countries&tag_contains_0=contains&tag_0=united-kingdom';
+
+async function fetchSearch(url: string, signal?: AbortSignal): Promise<Omit<Food, 'id'>[]> {
+  const data = (await getJson(url, signal)) as { products?: OffProduct[] };
+  return (data.products ?? []).map((p) => offProductToFood(p)).filter((f): f is Omit<Food, 'id'> => !!f && f.per100.energy !== undefined);
+}
+
+/**
+ * Search Open Food Facts. UK products are asked for first, and the whole
+ * world only fills the gaps, so a UK shopper sees UK supermarket products
+ * before an Italian pack of the same name. The caller re-ranks the answer
+ * (see foodSearch.ts); here the UK list simply comes first, in OFF's own
+ * popularity order. One of the two requests failing is fine as long as the
+ * other answers.
+ */
 export async function searchProducts(query: string, signal?: AbortSignal): Promise<Omit<Food, 'id'>[]> {
   const q = query.trim();
   if (q.length < 2) return [];
-  const url =
-    `${BASE}/cgi/search.pl?action=process&json=1&search_simple=1&page_size=24&sort_by=unique_scans_n&lc=en&${APP_ID}` +
-    `&search_terms=${encodeURIComponent(q)}&fields=${FIELDS}`;
-  const data = (await getJson(url, signal)) as { products?: OffProduct[] };
-  return (data.products ?? [])
-    .map((p) => offProductToFood(p))
-    .filter((f): f is Omit<Food, 'id'> => !!f && f.per100.energy !== undefined);
+  const [uk, world] = await Promise.allSettled([fetchSearch(searchUrl(q, UK_ONLY), signal), fetchSearch(searchUrl(q, ''), signal)]);
+  if (uk.status === 'rejected' && world.status === 'rejected') throw uk.reason;
+  const seen = new Set<string>();
+  const out: Omit<Food, 'id'>[] = [];
+  for (const list of [uk, world]) {
+    if (list.status !== 'fulfilled') continue;
+    for (const f of list.value) {
+      const key = f.barcode ?? `${f.name}|${f.brand}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(f);
+    }
+  }
+  return out;
 }
 
 /**

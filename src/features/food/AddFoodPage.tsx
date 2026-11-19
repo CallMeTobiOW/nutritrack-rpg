@@ -1,14 +1,16 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { Globe, Heart, Loader2, PenLine, ScanBarcode, Search, Trash2, UtensilsCrossed, WifiOff, X } from 'lucide-react';
+import { Globe, Heart, PackageSearch, Loader2, PenLine, ScanBarcode, Search, Trash2, UtensilsCrossed, WifiOff, X } from 'lucide-react';
 import { db } from '../../db/db';
 import { addSavedMealToDiary, deleteSavedMeal } from '../../db/actions';
 import { useToday } from '../../hooks/useToday';
 import { useGoBack } from '../../hooks/useGoBack';
-import { defaultPortionKcal, isMealSlot, matchesQuery, mealForTime } from '../../lib/food';
+import { defaultPortionKcal, isMealSlot, mealForTime } from '../../lib/food';
 import { MEAL_LABELS, MEAL_SLOTS, type Food, type MealSlot, type SavedMeal } from '../../lib/models';
-import { OffError, searchProducts } from '../../lib/openFoodFacts';
+import { OffError, isPlausibleBarcode, lookupBarcode, normaliseBarcode, searchProducts } from '../../lib/openFoodFacts';
+import { GENERIC_FOODS } from '../../data/genericFoods';
+import { correctQuery, rankFoods, vocabularyOf } from '../../lib/foodSearch';
 import { cn } from '../../lib/cn';
 import { Page } from '../../components/layout/Page';
 import { PageHeader, EmptyState } from '../../components/ui/Misc';
@@ -66,22 +68,32 @@ export default function AddFoodPage() {
 
   useEffect(() => () => abortRef.current?.abort(), []);
 
+  // Everyday foods that ship with the app, minus any the player already saved (those are in `foods`).
+  const bundled = useMemo(() => {
+    const saved = new Set((foods ?? []).filter((f) => f.source === 'generic').map((f) => f.name.toLowerCase()));
+    return GENERIC_FOODS.filter((g) => !saved.has(g.name.toLowerCase()));
+  }, [foods]);
+
   const local = useMemo(() => {
     if (!foods) return [];
-    const list = query ? foods.filter((f) => matchesQuery(f, query)) : foods;
-    if (query) return list.sort((a, b) => (b.useCount ?? 0) - (a.useCount ?? 0)).slice(0, 30);
+    if (query) return rankFoods(query, [...foods, ...bundled], 30);
+    const list = foods;
     if (tab === 'recent') return list.filter((f) => f.lastUsedAt).sort((a, b) => b.lastUsedAt! - a.lastUsedAt!).slice(0, 40);
     if (tab === 'favourites') return list.filter((f) => f.favorite).sort((a, b) => a.name.localeCompare(b.name));
     if (tab === 'mine') return list.filter((f) => f.source === 'custom').sort((a, b) => a.name.localeCompare(b.name));
     return [];
-  }, [foods, query, tab]);
+  }, [foods, bundled, query, tab]);
+
+  const vocabulary = useMemo(() => vocabularyOf(GENERIC_FOODS), []);
+  const corrected = useMemo(() => (query.trim().length >= 4 ? correctQuery(query, vocabulary) : null), [query, vocabulary]);
 
   // Products already saved on this device are listed above; don't show them twice.
   const remoteShown = useMemo(() => {
     if (!remote) return null;
     const localBarcodes = new Set(local.map((f) => f.barcode).filter(Boolean));
-    return remote.filter((f) => !f.barcode || !localBarcodes.has(f.barcode));
-  }, [remote, local]);
+    const fresh = remote.filter((f) => !f.barcode || !localBarcodes.has(f.barcode));
+    return rankFoods(corrected ?? query, fresh, 40);
+  }, [remote, local, query, corrected]);
 
   const runRemote = async () => {
     const q = query.trim();
@@ -92,8 +104,14 @@ export default function AddFoodPage() {
     setRemoteState('loading');
     setRemote(null);
     try {
-      const results = await searchProducts(q, ctrl.signal);
-      setRemote(results);
+      // A typed barcode goes straight to that product.
+      const code = normaliseBarcode(q);
+      if (code && isPlausibleBarcode(code)) {
+        const found = await lookupBarcode(code, ctrl.signal);
+        setRemote(found ? [found] : []);
+      } else {
+        setRemote(await searchProducts(corrected ?? q, ctrl.signal));
+      }
       setRemoteState('idle');
     } catch (e) {
       if ((e as Error).name === 'AbortError') return;
@@ -103,6 +121,17 @@ export default function AddFoodPage() {
   };
 
   const ctx = `meal=${meal}&date=${date}`;
+  // Bundled foods carry search-only words; they must not be saved with the food.
+  const pick = (f: Food | NewFood) => {
+    if ('aliases' in f) {
+      const { aliases: _aliases, ...food } = f as NewFood & { aliases?: string };
+      setTarget({ mode: 'add', food });
+    } else setTarget({ mode: 'add', food: f });
+  };
+  const trimmed = query.trim();
+  const searched = remote !== null || remoteState === 'error';
+  const nothingFound = trimmed.length >= 2 && local.length === 0 && (remoteShown?.length ?? 0) === 0 && searched;
+  const customHref = `/food/custom?${ctx}&name=${encodeURIComponent(trimmed)}`;
 
   return (
     <Page>
@@ -174,8 +203,13 @@ export default function AddFoodPage() {
         />
       )}
 
-      {query && (
-        <p className="hud-label mb-2">On this device</p>
+      {query && corrected && (
+        <p className="mb-2 text-sm text-muted">
+          Showing results for <span className="font-semibold text-text">{corrected}</span>
+        </p>
+      )}
+      {query && !nothingFound && (
+        <p className="hud-label mb-2">Everyday and saved foods</p>
       )}
 
       {tab === 'meals' && !query ? (
@@ -183,10 +217,10 @@ export default function AddFoodPage() {
       ) : (
         <FoodList
           foods={local}
-          onPick={(f) => setTarget({ mode: 'add', food: f })}
+          onPick={pick}
           empty={
             query ? (
-              <p className="py-3 text-sm text-muted">No saved foods match “{query}”.</p>
+              nothingFound ? null : <p className="py-3 text-sm text-muted">No saved or everyday foods match “{query}”.</p>
             ) : (
               <EmptyState icon={tab === 'favourites' ? <Heart size={26} /> : <UtensilsCrossed size={26} />} title={EMPTY[tab].title}>
                 {EMPTY[tab].text}
@@ -199,7 +233,7 @@ export default function AddFoodPage() {
       {query && (
         <div className="mt-5">
           <div className="mb-2 flex items-center justify-between">
-            <p className="hud-label">Open Food Facts</p>
+            {!nothingFound && <p className="hud-label">Open Food Facts</p>}
             {remoteState !== 'loading' && remote === null && (
               <Button size="sm" variant="secondary" onClick={() => void runRemote()} disabled={query.trim().length < 2}>
                 <Globe size={16} /> Search online
@@ -219,9 +253,9 @@ export default function AddFoodPage() {
           {remoteShown && (
             <FoodList
               foods={remoteShown}
-              onPick={(f) => setTarget({ mode: 'add', food: f })}
+              onPick={pick}
               empty={
-                <p className="py-3 text-sm text-muted">
+                nothingFound ? null : <p className="py-3 text-sm text-muted">
                   {remote && remote.length > 0 ? 'Every match is already saved on this device (listed above).' : 'No products found. Try fewer words, or create a custom food.'}
                 </p>
               }
@@ -231,6 +265,25 @@ export default function AddFoodPage() {
             <p className="text-xs text-faint">Only your search words are sent to Open Food Facts. Press search on the keyboard to look online.</p>
           )}
         </div>
+      )}
+
+      {trimmed.length >= 2 && (searched || local.length > 0) && (
+        <button
+          type="button"
+          onClick={() => navigate(customHref)}
+          className={cn(
+            'mt-5 flex w-full items-center gap-3 rounded-2xl border p-3.5 text-left transition active:scale-[0.99]',
+            nothingFound ? 'border-primary/50 bg-primary/10' : 'border-line bg-surface',
+          )}
+        >
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary/15 text-primary">
+            {nothingFound ? <PackageSearch size={20} /> : <PenLine size={20} />}
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block font-semibold">{nothingFound ? `Nothing found for “${trimmed}”` : 'Not the one you wanted?'}</span>
+            <span className="block truncate text-sm text-muted">Add “{trimmed}” as a custom food</span>
+          </span>
+        </button>
       )}
 
       <PortionSheet
