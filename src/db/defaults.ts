@@ -7,9 +7,12 @@ export const DEFAULT_SETTINGS: Settings = {
   weightUnit: 'kg',
   sound: true,
   allDailyBonusXp: 50,
-  waterQuickAmounts: [150, 250, 350, 500, 750],
+  waterQuickAmounts: [100, 250, 500],
   seenBriefings: [],
 };
+
+/** Quick-add amounts shipped before v0.7; replaced by the new defaults on start-up. */
+export const OLD_WATER_QUICK_AMOUNTS = [150, 250, 350, 500, 750];
 
 export function defaultProfile(now = Date.now()): Profile {
   return {

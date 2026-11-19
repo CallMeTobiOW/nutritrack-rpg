@@ -4,6 +4,7 @@
  */
 import type { DateKey } from './dates';
 import type { ScoredGoal } from './rank';
+import type { BadgeSeen } from './badges';
 import type { NutrientKey, NutrientValues } from './nutrients';
 import type { MeasureUnit } from './nutrition';
 import type { ActivityLevel, Objective, Targets } from './targets';
@@ -167,7 +168,7 @@ export interface Quest {
   createdAt: number;
 }
 
-export type XpEventKind = 'quest' | 'bonus' | 'achievement';
+export type XpEventKind = 'quest' | 'bonus' | 'achievement' | 'badge';
 
 /**
  * The XP ledger. The `id` is deterministic (e.g. `quest:<id>:<period>`), so
@@ -251,6 +252,8 @@ export interface Settings {
    * so a rank change is shown once, even when it happens while the app is closed.
    */
   rankSeenStep?: number;
+  /** The ladder step each badge was last shown at, so tier-ups and drops are announced once. */
+  badgeSeen?: BadgeSeen;
 }
 
 /** A locked competitive-rank match: one calendar day's result. Never edited once written. */
@@ -260,5 +263,7 @@ export interface RankMatchRecord {
   score: number;
   /** Goals hit that day (keys of GoalFlags). */
   goals: ScoredGoal[];
+  /** Diary entries that day (recorded since v0.7; older records leave it out). */
+  entries?: number;
   lockedAt: number;
 }

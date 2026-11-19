@@ -1,4 +1,5 @@
 import { useId } from 'react';
+import { ICONS } from '../ui/Icon';
 import type { TierId } from '../../lib/rank';
 
 /**
@@ -31,12 +32,16 @@ interface RankEmblemProps {
   /** 5…1, or null for Zenith / unknown. Shown as pips under the crest. */
   division?: number | null;
   size?: number;
-  /** Placement: a muted crest with a question mark. */
+  /** Placement: a muted crest with a question mark (or the glyph, muted). */
   unranked?: boolean;
+  /** Icon name (see ICONS) drawn in the crest instead of the tier's own glyph: used by badges. */
+  glyph?: string;
+  /** Accessible name; defaults to the tier. */
+  label?: string;
   className?: string;
 }
 
-export function RankEmblem({ tier, division = null, size = 64, unranked, className }: RankEmblemProps) {
+export function RankEmblem({ tier, division = null, size = 64, unranked, glyph, label, className }: RankEmblemProps) {
   // Tier in the id too, so emblems rendered in separate roots never share gradients.
   const id = `${unranked ? 'u' : tier}-${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
   const level = TIER_ORDER.indexOf(tier);
@@ -51,7 +56,7 @@ export function RankEmblem({ tier, division = null, size = 64, unranked, classNa
       height={size * 1.12}
       className={className}
       role="img"
-      aria-label={unranked ? 'Unranked: placements in progress' : `${tier} rank emblem`}
+      aria-label={label ?? (unranked ? 'Unranked: placements in progress' : `${tier} rank emblem`)}
       style={{ filter: unranked ? undefined : `drop-shadow(0 0 ${size / 9}px color-mix(in srgb, ${p.mid} 55%, transparent))`, overflow: 'visible' }}
     >
       <defs>
@@ -105,7 +110,9 @@ export function RankEmblem({ tier, division = null, size = 64, unranked, classNa
       {!unranked && level >= 1 && <polygon points="50,18 77,34 77,66 50,82 23,66 23,34" fill="none" stroke={g} strokeWidth="1.5" opacity="0.6" />}
 
       {/* Glyph */}
-      {unranked ? (
+      {glyph && ICONS[glyph] ? (
+        <GlyphIcon name={glyph} stroke={g} />
+      ) : unranked ? (
         <text x="50" y="62" textAnchor="middle" fontSize="34" fontWeight="700" fill={g} fontFamily="Rajdhani, system-ui, sans-serif">
           ?
         </text>
@@ -146,6 +153,12 @@ export function RankEmblem({ tier, division = null, size = 64, unranked, classNa
       )}
     </svg>
   );
+}
+
+function GlyphIcon({ name, stroke }: { name: string; stroke: string }) {
+  const Glyph = ICONS[name];
+  // Lucide draws on a 24-unit grid; place it in the crest's inner hexagon.
+  return <Glyph x={33} y={32} width={34} height={34} color={stroke} strokeWidth={2.2} aria-hidden />;
 }
 
 /** Tier colour mixed toward the theme's text colour, so labels stay readable in light and dark. */

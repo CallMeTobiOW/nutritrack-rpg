@@ -23,7 +23,7 @@ import { analyseIngredients } from '../lib/ingredients';
 import { autoRuleFits, makeQuestEvent, periodKey, questEventId } from '../lib/quests';
 import { suggestMicroTargets, suggestTargets, type Targets } from '../lib/targets';
 import { db, uid } from './db';
-import { DEFAULT_SETTINGS, QUEST_TEMPLATES, defaultProfile, questFromTemplate } from './defaults';
+import { DEFAULT_SETTINGS, OLD_WATER_QUICK_AMOUNTS, QUEST_TEMPLATES, defaultProfile, questFromTemplate } from './defaults';
 import { withProgression } from './progression';
 import { removePendingScan } from './scans';
 
@@ -35,7 +35,12 @@ export async function ensureInitialized(): Promise<void> {
     if (!(await db.profile.get('me'))) await db.profile.put(defaultProfile());
     const settings = await db.settings.get('settings');
     if (!settings) await db.settings.put({ ...DEFAULT_SETTINGS });
-    else await db.settings.put({ ...DEFAULT_SETTINGS, ...settings });
+    else {
+      const next = { ...DEFAULT_SETTINGS, ...settings };
+      // The old default water buttons move to 100 / 250 / 500 ml (they can't be edited in the app, so this never overrides a choice).
+      if (next.waterQuickAmounts.join() === OLD_WATER_QUICK_AMOUNTS.join()) next.waterQuickAmounts = [...DEFAULT_SETTINGS.waterQuickAmounts];
+      await db.settings.put(next);
+    }
     if ((await db.quests.count()) === 0) {
       const now = Date.now();
       const starters = QUEST_TEMPLATES.filter((t) => t.starter);

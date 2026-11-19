@@ -15,6 +15,7 @@ import { completeness, progress } from '../../lib/nutrition';
 import { formatVolume } from '../../lib/units';
 import { sfx } from '../../lib/sound';
 import { Page } from '../../components/layout/Page';
+import { MovedNotice } from '../../components/layout/MovedNotice';
 import { Card, SectionTitle } from '../../components/ui/Card';
 import { ProgressRing } from '../../components/ui/ProgressRing';
 import { ProgressBar } from '../../components/ui/ProgressBar';
@@ -53,6 +54,7 @@ export function HomePage() {
       </header>
 
       <div className="space-y-4">
+        <MovedNotice />
         {player && (
           <Link to="/profile" className="block">
             <Card hud className="animate-fade-up flex items-center gap-4">
@@ -203,7 +205,7 @@ function WaterCard() {
   const today = useToday();
   const profile = useProfile();
   const { waterQuickAmounts } = useSettings();
-  const quick = waterQuickAmounts.length ? waterQuickAmounts.slice(0, 3) : [250, 500, 750];
+  const quick = waterQuickAmounts.length ? waterQuickAmounts.slice(0, 3) : [100, 250, 500];
   const m = useDayMetrics(today);
   const ml = m?.waterMl ?? 0;
   const p = progress(ml, profile.targets.waterMl);

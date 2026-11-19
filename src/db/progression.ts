@@ -14,6 +14,7 @@ import type { RankMatchRecord, XpEvent } from '../lib/models';
 import { achievementEventId, computeDayMetrics, reconcileQuests } from '../lib/quests';
 import { computePlayerStats, totalXp } from '../lib/stats';
 import { datesToLock, replayMatches, scoreDay, seenStep } from '../lib/rank';
+import { BADGES, badgeEventId, earnedSteps, replayBadge, stepLabel, stepXp } from '../lib/badges';
 import { dayMetricsFor } from '../lib/stats';
 import { levelFromXp, rankTitle } from '../lib/xp';
 import { db } from './db';
@@ -92,6 +93,9 @@ async function syncNow(today: DateKey, now = Date.now()): Promise<SyncReport> {
     // 3. Competitive rank: lock every finished day that isn't locked yet.
     await lockRankMatches(today, now, diary, water, weights, targets);
 
+    // 4. Badges: pay each ladder step's XP the first time it is reached.
+    await payBadgeXp(events, today, now);
+
     return {
       completed: add.filter((e) => e.kind === 'quest'),
       uncompleted: remove,
@@ -127,6 +131,26 @@ async function lockRankMatches(
   const metrics = dayMetricsFor(dates, diary, water, weights);
   const rows: RankMatchRecord[] = dates.map((d) => ({ ...scoreDay(metrics.get(d)!, targets), lockedAt: now }));
   await db.rankMatches.bulkPut(rows);
+}
+
+/**
+ * Badge XP. Steps are paid up to each badge's lifetime peak on locked days,
+ * with deterministic ids, so a badge that slips and climbs back never pays
+ * twice, and rows already paid are never taken back.
+ */
+async function payBadgeXp(events: Map<string, XpEvent>, today: DateKey, now: number): Promise<void> {
+  const matches = await db.rankMatches.toArray();
+  const fresh: XpEvent[] = [];
+  for (const def of BADGES) {
+    for (const step of earnedSteps(replayBadge(def, matches))) {
+      const id = badgeEventId(def.id, step);
+      if (events.has(id)) continue;
+      const ev: XpEvent = { id, kind: 'badge', refId: def.id, period: 'once', date: today, xp: stepXp(step), title: `${def.title}: ${stepLabel(step)}`, createdAt: now };
+      events.set(id, ev);
+      fresh.push(ev);
+    }
+  }
+  if (fresh.length) await db.xpEvents.bulkPut(fresh);
 }
 
 async function currentLevel(): Promise<number> {

@@ -6,6 +6,7 @@ import { dismissCelebration, getCelebrations, subscribeCelebrations, type Queued
 import { sfx } from '../../lib/sound';
 import { Icon } from '../ui/Icon';
 import { Button } from '../ui/Button';
+import { RankEmblem, tierColor, tierTextColor } from '../game/RankEmblem';
 
 /** Toasts for quests/achievements and a full-screen moment for level-ups. */
 export function Celebrations() {
@@ -36,6 +37,26 @@ function Toast({ q }: { q: QueuedCelebration }) {
   }, [q.key, item.kind]);
 
   if (item.kind === 'level') return null;
+  if (item.kind === 'badge') {
+    const tc = tierColor(item.tier);
+    return (
+      <button
+        type="button"
+        onClick={() => dismissCelebration(q.key)}
+        className="animate-fade-up pointer-events-auto flex w-full max-w-sm items-center gap-3 rounded-2xl border bg-surface-2/95 px-4 py-3 text-left shadow-2xl backdrop-blur-xl"
+        style={{ borderColor: `color-mix(in srgb, ${tc} 45%, transparent)`, boxShadow: `0 10px 40px -10px color-mix(in srgb, ${tc} 50%, transparent)` }}
+        role="status"
+      >
+        <RankEmblem tier={item.tier} glyph={item.icon} size={34} label={item.title} />
+        <span className="min-w-0 flex-1">
+          <span className="hud-label block !text-[10px]" style={{ color: tierTextColor(item.tier) }}>
+            Badge ranked up
+          </span>
+          <span className="block truncate font-semibold">{item.title}</span>
+        </span>
+      </button>
+    );
+  }
   const ach = item.kind === 'achievement' ? ACHIEVEMENTS.find((a) => a.id === item.id) : undefined;
   const color = ach ? TIER_COLORS[ach.tier] : item.kind === 'bonus' ? 'var(--gold)' : 'var(--success)';
 
