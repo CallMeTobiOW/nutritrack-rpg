@@ -118,38 +118,37 @@ export function HealthCard({ food, onOpenFood, onAddIngredients, refreshing }: P
 const SHOW_FIRST = 3;
 
 function ReasonList({ reasons }: { reasons: ScoreReason[] }) {
-  const [open, setOpen] = useState<string | null>(null);
   const [all, setAll] = useState(false);
   const shown = all ? reasons : reasons.slice(0, SHOW_FIRST);
   return (
-    <ul className="mt-2 space-y-1">
+    <ul className="mt-2 space-y-2.5">
       {shown.map((r) => {
         const bad = r.points < 0;
-        const expanded = open === r.text;
         return (
-          <li key={r.text}>
-            <button
-              type="button"
-              disabled={!r.detail}
-              aria-expanded={r.detail ? expanded : undefined}
-              onClick={() => setOpen(expanded ? null : r.text)}
-              className="flex min-h-9 w-full items-start gap-2.5 rounded-lg py-1 text-left text-sm disabled:cursor-default"
+          <li key={r.text} className="flex items-start gap-2.5 text-sm">
+            <span
+              className={cn(
+                'mt-0.5 w-9 shrink-0 rounded-md py-0.5 text-center text-xs font-bold tabular',
+                bad ? 'bg-danger/15 text-danger' : 'bg-success/15 text-success',
+              )}
             >
-              <span
-                className={cn(
-                  'mt-0.5 w-9 shrink-0 rounded-md py-0.5 text-center text-xs font-bold tabular',
-                  bad ? 'bg-danger/15 text-danger' : 'bg-success/15 text-success',
-                )}
-              >
-                {bad ? '' : '+'}
-                {r.points}
-              </span>
-              <span className="min-w-0 flex-1">
-                {r.text}
-                {r.detail && <Info size={13} className="ml-1 inline align-[-2px] text-faint" />}
-                {expanded && <span className="mt-1 block text-xs text-muted">{r.detail}</span>}
-              </span>
-            </button>
+              {bad ? '' : '+'}
+              {r.points}
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="font-medium">{r.text}</p>
+              {r.detail && <p className="mt-0.5 text-xs leading-snug text-muted">{r.detail}</p>}
+              {r.items && (
+                <ul className="mt-1.5 space-y-1 border-l-2 border-line pl-2.5">
+                  {r.items.map((i) => (
+                    <li key={i.name} className="text-xs leading-snug text-muted">
+                      <span className="font-semibold text-text">{i.name}:</span> {i.why}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {r.source && <p className="mt-0.5 text-[11px] text-faint">Source: {r.source}</p>}
+            </div>
           </li>
         );
       })}

@@ -17,6 +17,7 @@
 import type { FoodQuality } from './models';
 import type { NutrientValues } from './nutrients';
 import { ADDITIVES, additiveInfo, type AdditiveConcern } from './additives';
+import { MARKER_INFO } from './ingredients';
 
 export const BASE_SCORE = 70;
 
@@ -24,8 +25,12 @@ export interface ScoreReason {
   /** Points added (positive) or removed (negative). */
   points: number;
   text: string;
-  /** Longer explanation, e.g. why an additive is flagged. */
+  /** Plain-English reason it matters, e.g. why an additive is flagged. */
   detail?: string;
+  /** Who says so, e.g. "NHS" or "WHO (IARC)". */
+  source?: string;
+  /** The specific ingredients behind this reason, each with why it counts. */
+  items?: { name: string; why: string }[];
 }
 
 export type ScoreBand = 'excellent' | 'good' | 'fair' | 'poor' | 'bad';
@@ -78,6 +83,14 @@ const PENALTY = {
   fat: { amber: 3, red: 6, label: 'fat' },
 } as const;
 
+/** Why each nutrient to limit matters (NHS guidance for adults). */
+const NUTRIENT_WHY: Record<keyof typeof PENALTY, { detail: string; source?: string }> = {
+  sugar: { detail: 'Too much sugar adds calories that don\u2019t fill you up and causes tooth decay. Adults should have no more than 30 g of free sugars a day.', source: 'NHS' },
+  satFat: { detail: 'Raises \u201cbad\u201d LDL cholesterol, which increases the risk of heart disease. Men should have no more than 30 g a day, women 20 g.', source: 'NHS' },
+  salt: { detail: 'Too much salt raises blood pressure, a cause of heart disease and stroke. Adults should have no more than 6 g a day.', source: 'NHS' },
+  fat: { detail: 'Fat has 9 kcal per gram, more than twice sugar or protein, so fatty foods add up quickly.' },
+};
+
 const ADDITIVE_POINTS: Record<AdditiveConcern, number> = { high: 10, moderate: 4, low: 2 };
 
 const fmt = (n: number) => (n >= 100 ? Math.round(n) : Math.round(n * 10) / 10);
@@ -107,19 +120,25 @@ export function healthScore(food: { per100: NutrientValues; unit: 'g' | 'ml'; qu
     // Fat only counts when saturates are unknown or it is high on its own.
     const [amber, red] = lights[key];
     const p = PENALTY[key];
-    if (amount > red) minuses.push({ points: -p.red, text: `High in ${p.label}: ${fmt(amount)} g per ${per}` });
-    else if (amount > amber && key !== 'fat') minuses.push({ points: -p.amber, text: `Medium ${p.label}: ${fmt(amount)} g per ${per}` });
-    else if (amount > amber && key === 'fat' && v.satFat === undefined) minuses.push({ points: -p.amber, text: `Medium fat: ${fmt(amount)} g per ${per}` });
+    const why = NUTRIENT_WHY[key];
+    if (amount > red) minuses.push({ points: -p.red, text: `High in ${p.label}: ${fmt(amount)} g per ${per}`, ...why });
+    else if (amount > amber && key !== 'fat') minuses.push({ points: -p.amber, text: `Medium ${p.label}: ${fmt(amount)} g per ${per}`, ...why });
+    else if (amount > amber && key === 'fat' && v.satFat === undefined) minuses.push({ points: -p.amber, text: `Medium fat: ${fmt(amount)} g per ${per}`, ...why });
   }
   if (drink && v.sugar !== undefined && v.sugar >= 5) {
     minuses.push({
       points: v.sugar >= 8 ? -16 : -10,
       text: `Sugary drink: ${fmt(v.sugar)} g sugar per 100 ml`,
-      detail: `Above the UK sugar tax ${v.sugar >= 8 ? 'higher' : 'lower'} band (${v.sugar >= 8 ? 8 : 5} g per 100 ml). Liquid sugar doesn't fill you up.`,
+      detail: `Above the UK sugar tax ${v.sugar >= 8 ? 'higher' : 'lower'} band (${v.sugar >= 8 ? 8 : 5} g per 100 ml). Sugar in drinks doesn't fill you up, so it is easy to have a lot.`,
+      source: 'UK Soft Drinks Industry Levy',
     });
   }
   if (!drink && v.energy !== undefined && v.energy > 400 && (v.sugar ?? 0) + (v.satFat ?? 0) > 20) {
-    minuses.push({ points: -6, text: `Calorie dense: ${Math.round(v.energy)} kcal per 100 g, mostly from sugar and fat` });
+    minuses.push({
+      points: -6,
+      text: `Calorie dense: ${Math.round(v.energy)} kcal per 100 g, mostly from sugar and fat`,
+      detail: 'A small amount carries a lot of calories, so it is easy to eat more than you need.',
+    });
   }
 
   // Good stuff.
@@ -135,16 +154,23 @@ export function healthScore(food: { per100: NutrientValues; unit: 'g' | 'ml'; qu
   }
 
   // Processing and additives.
-  const why = q?.markers?.length ? ` Found: ${q.markers.join(', ')}.` : '';
   if (q?.nova === 4) {
+    const items = (q.markers ?? []).flatMap((m) => MARKER_INFO[m] ?? []);
     minuses.push({
       points: -12,
       text: q.novaEstimated ? 'Ultra-processed (from its ingredients)' : 'Ultra-processed (NOVA 4)',
-      detail: `Made with industrial ingredients you wouldn't cook with at home.${why} Diets high in ultra-processed food are linked to weight gain and heart disease.`,
+      detail:
+        'Made with industrial ingredients you wouldn\u2019t cook with at home. Large studies link diets high in ultra-processed food with obesity, type 2 diabetes and heart disease, though exactly why is still being researched.',
+      source: 'BMJ, 2024 review of 45 studies',
+      items: items.length ? items : undefined,
     });
-  }
-  else if (q?.nova === 3) minuses.push({ points: -4, text: 'Processed (NOVA 3)' });
-  else if (q?.nova === 1) pluses.push({ points: 5, text: 'Unprocessed or minimally processed (NOVA 1)' });
+  } else if (q?.nova === 3) {
+    minuses.push({
+      points: -4,
+      text: 'Processed (NOVA 3)',
+      detail: 'A whole food with salt, sugar or oil added, like tinned fish or cheese. Fine as part of a balanced diet.',
+    });
+  } else if (q?.nova === 1) pluses.push({ points: 5, text: 'Unprocessed or minimally processed (NOVA 1)' });
 
   if (q?.additives) {
     const flagged = q.additives
@@ -152,10 +178,14 @@ export function healthScore(food: { per100: NutrientValues; unit: 'g' | 'ml'; qu
       .filter((a): a is { code: string; info: NonNullable<ReturnType<typeof additiveInfo>> } => !!a.info)
       .sort((a, b) => ADDITIVE_POINTS[b.info.concern] - ADDITIVE_POINTS[a.info.concern]);
     for (const { info } of flagged) {
-      minuses.push({ points: -ADDITIVE_POINTS[info.concern], text: info.name, detail: info.why });
+      minuses.push({ points: -ADDITIVE_POINTS[info.concern], text: info.name, detail: info.why, source: info.source });
     }
     if (q.additives.length >= 5) {
-      minuses.push({ points: -4, text: `${q.additives.length} additives in total` });
+      minuses.push({
+        points: -4,
+        text: `${q.additives.length} additives in total`,
+        detail: 'Each may be approved on its own, but a long list of additives is a sign of a heavily engineered recipe.',
+      });
     }
   }
 

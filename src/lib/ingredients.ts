@@ -85,6 +85,33 @@ const ULTRA_MARKERS: [RegExp, string][] = [
   [/mechanically separated/, 'mechanically separated meat'],
 ];
 
+/** Every marker label, for checks. */
+export const ULTRA_MARKER_LABELS = ULTRA_MARKERS.map(([, label]) => label);
+
+/** Why each ultra-processing marker matters, in plain English. Keys are the labels above. */
+export const MARKER_INFO: Record<string, { name: string; why: string }> = {
+  flavouring: { name: 'Flavourings', why: 'Made in a factory to add or boost taste, so the food tastes of more than its real ingredients.' },
+  'glucose syrup': { name: 'Glucose syrup', why: 'A refined sugar syrup made from starch. It counts as free sugar, which the NHS advises cutting down on.' },
+  'invert sugar': { name: 'Invert sugar', why: 'A processed sugar syrup that keeps food soft and sweet. It counts as free sugar.' },
+  maltodextrin: { name: 'Maltodextrin', why: 'A refined starch powder used as filler. It raises blood sugar quickly.' },
+  dextrose: { name: 'Dextrose', why: 'Pure glucose, an added sugar.' },
+  'modified starch': { name: 'Modified starch', why: 'Starch altered in a factory to thicken or stabilise. Not something you would cook with at home.' },
+  'hydrogenated fat': {
+    name: 'Hydrogenated fat',
+    why: 'Oil hardened in a factory. Partly hydrogenated fat contains trans fat, which raises "bad" cholesterol; the WHO calls for industrial trans fat to be removed from food.',
+  },
+  'hydrolysed protein': { name: 'Hydrolysed protein', why: 'Protein broken down in a factory to give a strong savoury taste.' },
+  'protein isolate': { name: 'Protein isolate', why: 'Protein extracted industrially, used to build foods rather than cook them.' },
+  emulsifier: { name: 'Emulsifiers', why: 'Keep oil and water mixed for texture and shelf life. Some disturbed gut bacteria in early studies.' },
+  sweetener: { name: 'Sweeteners', why: 'The WHO advises against relying on sweeteners to control weight.' },
+  colour: { name: 'Colours', why: 'Added only to change how the food looks.' },
+  'flavour enhancer': { name: 'Flavour enhancers', why: 'Make food taste more savoury, such as MSG. Safe within limits, but a sign of an engineered recipe.' },
+  'thickener or stabiliser': { name: 'Thickeners or stabilisers', why: 'Give a texture the real ingredients would not have on their own.' },
+  'glazing agent': { name: 'Glazing agents', why: 'Make food look shiny.' },
+  humectant: { name: 'Humectants', why: 'Keep food moist so it lasts longer on the shelf.' },
+  'mechanically separated meat': { name: 'Mechanically separated meat', why: 'Meat paste stripped from bones by machine.' },
+};
+
 /** Culinary ingredients (NOVA 2) that turn a whole food into a processed one (NOVA 3) when added. */
 const CULINARY = /\b(sugar|salt|oil|butter|vinegar|honey|syrup|cream)\b/;
 

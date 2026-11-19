@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { analyseIngredients, normaliseIngredients } from '../ingredients';
+import { analyseIngredients, MARKER_INFO, normaliseIngredients, ULTRA_MARKER_LABELS } from '../ingredients';
+import { ADDITIVES } from '../additives';
 import { parseQuality, QUALITY_VERSION } from '../openFoodFacts';
 import { healthScore } from '../healthScore';
 
@@ -40,7 +41,7 @@ describe('Open Food Facts products without an ingredients analysis', () => {
     const r = healthScore({ per100: { energy: 2, sugar: 0.5, fat: 0, satFat: 0, sodium: 10 }, unit: 'ml', quality: q })!;
     expect(r.ingredientsChecked).toBe(true);
     expect(r.minuses.map((m) => m.text)).toEqual(expect.arrayContaining(['Ultra-processed (from its ingredients)', 'Sucralose (E955)']));
-    expect(r.minuses.find((m) => m.text.startsWith('Ultra'))!.detail).toMatch(/Found: flavouring, sweetener, colour/);
+    expect(r.minuses.find((m) => m.text.startsWith('Ultra'))!.items!.map((i) => i.name)).toEqual(['Flavourings', 'Sweeteners', 'Colours']);
   });
 
   it('trusts Open Food Facts’ own analysis when there is one', () => {
@@ -48,5 +49,25 @@ describe('Open Food Facts products without an ingredients analysis', () => {
     expect(q.nova).toBe(3);
     expect(q.novaEstimated).toBeUndefined();
     expect(q.additives).toEqual([]);
+  });
+});
+
+describe('explanations', () => {
+  it('explains every ultra-processing marker', () => {
+    const labels = ULTRA_MARKER_LABELS;
+    for (const l of labels) expect(MARKER_INFO[l]?.why.length, l).toBeGreaterThan(10);
+  });
+  it('gives every flagged additive a reason and a source', () => {
+    for (const [code, a] of Object.entries(ADDITIVES)) {
+      expect(a.why.length, code).toBeGreaterThan(20);
+      expect(a.source.length, code).toBeGreaterThan(2);
+    }
+  });
+  it('explains nutrient penalties with NHS limits', () => {
+    const r = healthScore({ per100: { energy: 500, sugar: 40, satFat: 10, fat: 25, sodium: 800 }, unit: 'g' })!;
+    const salt = r.minuses.find((m) => m.text.startsWith('High in salt'))!;
+    expect(salt.detail).toMatch(/6 g a day/);
+    expect(salt.source).toBe('NHS');
+    expect(r.minuses.every((m) => !!m.detail)).toBe(true);
   });
 });
