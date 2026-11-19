@@ -23,6 +23,17 @@ export const AUTO_RULE_META = {
   fiber: { label: 'Reach your fibre target' },
 } as const;
 
+/**
+ * Whether an auto-tracking rule makes sense for a repeat setting. Day-based
+ * rules (water, protein…) on a weekly quest would flip on and off as each new
+ * day starts, and the weekly weigh-in rule on a daily quest would pay out
+ * every day of the week from a single weigh-in.
+ */
+export function autoRuleFits(rule: NonNullable<Quest['auto']>, recurrence: Quest['recurrence']): boolean {
+  if (rule === 'weighIn') return recurrence !== 'daily';
+  return recurrence !== 'weekly';
+}
+
 export function periodKey(quest: Pick<Quest, 'recurrence'>, date: DateKey): string {
   if (quest.recurrence === 'daily') return date;
   if (quest.recurrence === 'weekly') return toWeekKey(date);
@@ -160,7 +171,8 @@ export function reconcileQuests(
   const done = new Set(events.keys());
 
   for (const q of quests) {
-    if (!q.auto) continue;
+    // Quests saved before rules were tied to the repeat setting are ignored here.
+    if (!q.auto || !autoRuleFits(q.auto, q.recurrence)) continue;
     if (!isQuestVisible(q, today, events)) continue;
     const id = questEventId(q.id, periodKey(q, today));
     const shouldBeDone = evaluateAuto(q.auto, ctx);

@@ -5,6 +5,7 @@ import { Globe, Heart, Loader2, PenLine, ScanBarcode, Search, Trash2, UtensilsCr
 import { db } from '../../db/db';
 import { addSavedMealToDiary, deleteSavedMeal } from '../../db/actions';
 import { useToday } from '../../hooks/useToday';
+import { useGoBack } from '../../hooks/useGoBack';
 import { defaultPortionKcal, isMealSlot, matchesQuery, mealForTime } from '../../lib/food';
 import { MEAL_LABELS, MEAL_SLOTS, type Food, type MealSlot, type SavedMeal } from '../../lib/models';
 import { OffError, searchProducts } from '../../lib/openFoodFacts';
@@ -31,6 +32,7 @@ export default function AddFoodPage() {
   const today = useToday();
   const [params, setParams] = useSearchParams();
   const navigate = useNavigate();
+  const goBack = useGoBack();
   const date = params.get('date') ?? today;
   const initialMeal = useMealParam();
   const [meal, setMeal] = useState<MealSlot>(initialMeal);
@@ -231,7 +233,7 @@ export default function AddFoodPage() {
         </div>
       )}
 
-      <PortionSheet target={target} date={date} meal={meal} onClose={() => setTarget(null)} onDone={() => navigate(-1)} />
+      <PortionSheet target={target} date={date} meal={meal} onClose={() => setTarget(null)} onDone={() => goBack('/food')} />
       <SavedMealSheet
         meal={mealDetail}
         slot={meal}
@@ -239,7 +241,7 @@ export default function AddFoodPage() {
         onAdd={async (m) => {
           await addSavedMealToDiary(m.id, date, meal);
           setMealDetail(null);
-          navigate(-1);
+          goBack('/food');
         }}
       />
     </Page>
@@ -328,7 +330,7 @@ function SavedMealSheet({ meal, slot, onClose, onAdd }: { meal: SavedMeal | null
       open
       onClose={onClose}
       title={meal.name}
-      subtitle={`${Math.round(mealKcal(meal))} kcal · ${meal.items.length} items`}
+      subtitle={`${Math.round(mealKcal(meal))} kcal · ${meal.items.length} ${meal.items.length === 1 ? 'item' : 'items'}`}
       footer={
         <div className="flex gap-2">
           <Button

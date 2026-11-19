@@ -17,7 +17,8 @@ import type {
   Settings,
 } from '../lib/models';
 import type { NutrientKey } from '../lib/nutrients';
-import { makeQuestEvent, periodKey, questEventId } from '../lib/quests';
+import { per100Problem } from '../lib/food';
+import { autoRuleFits, makeQuestEvent, periodKey, questEventId } from '../lib/quests';
 import { suggestMicroTargets, suggestTargets, type Targets } from '../lib/targets';
 import { db, uid } from './db';
 import { DEFAULT_SETTINGS, QUEST_TEMPLATES, defaultProfile, questFromTemplate } from './defaults';
@@ -61,15 +62,28 @@ export async function saveProfile(input: Partial<ProfileInput>, opts: { onboard?
       age: clamp(Math.round(input.age ?? current.age), LIMITS.age.min, LIMITS.age.max),
       heightCm: clamp(input.heightCm ?? current.heightCm, LIMITS.heightCm.min, LIMITS.heightCm.max),
       weightKg: clamp(input.weightKg ?? current.weightKg, LIMITS.weightKg.min, LIMITS.weightKg.max),
+      goalWeightKg: validGoalWeight('goalWeightKg' in input ? input.goalWeightKg : current.goalWeightKg),
       onboarded: opts.onboard ? true : current.onboarded,
       updatedAt: Date.now(),
     };
     if (!next.customTargets) {
-      next.targets = suggestTargets(next);
+      next.targets = suggestedFor(next);
       next.microTargets = suggestMicroTargets(next.sex, next.age);
     }
     await db.profile.put(next);
   }, { silent: opts.onboard });
+}
+
+/** A goal weight outside the loggable range is dropped rather than saved. */
+function validGoalWeight(kg: number | undefined): number | undefined {
+  if (kg === undefined || !Number.isFinite(kg)) return undefined;
+  return kg >= LIMITS.weightKg.min && kg <= LIMITS.weightKg.max ? Math.round(kg * 100) / 100 : undefined;
+}
+
+/** Suggested targets for a profile, keeping a water goal the player chose. */
+function suggestedFor(p: Profile): Targets {
+  const t = suggestTargets(p);
+  return p.customWater ? { ...t, waterMl: p.targets.waterMl } : t;
 }
 
 export async function updateTargets(patch: Partial<Targets>): Promise<void> {
@@ -77,9 +91,21 @@ export async function updateTargets(patch: Partial<Targets>): Promise<void> {
     const p = (await db.profile.get('me')) ?? defaultProfile();
     const targets = { ...p.targets };
     for (const [k, v] of Object.entries(patch) as [keyof Targets, number][]) {
-      if (Number.isFinite(v) && v >= 0) targets[k] = Math.round(v);
+      if (!Number.isFinite(v)) continue;
+      // Keep targets in a range the rest of the app can work with (no 0 ml water goal, no 99,999 kcal).
+      const r = k === 'calories' ? LIMITS.calories : k === 'waterMl' ? LIMITS.waterGoalMl : LIMITS.targetGrams;
+      targets[k] = clamp(Math.round(v), r.min, r.max);
     }
-    await db.profile.put({ ...p, targets, customTargets: true, updatedAt: Date.now() });
+    // Changing only the water goal must not freeze the calorie and macro
+    // targets: they should keep following weight and profile changes.
+    const waterOnly = Object.keys(patch).every((k) => k === 'waterMl');
+    await db.profile.put({
+      ...p,
+      targets,
+      customTargets: waterOnly ? p.customTargets : true,
+      customWater: 'waterMl' in patch ? true : p.customWater,
+      updatedAt: Date.now(),
+    });
   });
 }
 
@@ -91,6 +117,7 @@ export async function resetTargetsToSuggested(): Promise<void> {
       targets: suggestTargets(p),
       microTargets: suggestMicroTargets(p.sex, p.age),
       customTargets: false,
+      customWater: false,
       updatedAt: Date.now(),
     });
   });
@@ -153,6 +180,8 @@ export async function saveOffFood(food: Omit<Food, 'id'>, opts: { scanned?: bool
 export type CustomFoodInput = Pick<Food, 'name' | 'brand' | 'unit' | 'per100' | 'servings' | 'barcode'>;
 
 export async function saveCustomFood(input: CustomFoodInput, id?: string): Promise<Food> {
+  const problem = per100Problem(input.per100, input.unit);
+  if (problem) throw new Error(problem);
   const now = Date.now();
   const existing = id ? await db.foods.get(id) : undefined;
   const food: Food = {
@@ -319,10 +348,24 @@ export async function deleteWater(id: string): Promise<void> {
 // ───────────────────────────── Weight ─────────────────────────────
 
 /** One weigh-in per day: logging again on the same day replaces it. */
-export async function logWeight(date: DateKey, kg: number, note?: string): Promise<void> {
+function assertWeightInRange(kg: number): void {
   if (!Number.isFinite(kg) || kg < LIMITS.weightKg.min || kg > LIMITS.weightKg.max) {
-    throw new Error('That weight looks out of range.');
+    throw new Error(`That weight looks out of range (${LIMITS.weightKg.min}–${LIMITS.weightKg.max} kg).`);
   }
+}
+
+/** Keep the profile weight (and suggested targets) in step with the most recent weigh-in. */
+async function syncProfileWeight(): Promise<void> {
+  const latest = await db.weights.orderBy('date').last();
+  const p = await db.profile.get('me');
+  if (!p || !latest || latest.kg === p.weightKg) return;
+  const next = { ...p, weightKg: latest.kg, updatedAt: Date.now() };
+  if (!p.customTargets) next.targets = suggestedFor(next);
+  await db.profile.put(next);
+}
+
+export async function logWeight(date: DateKey, kg: number, note?: string): Promise<void> {
+  assertWeightInRange(kg);
   await withProgression(async () => {
     const existing = await db.weights.where('date').equals(date).first();
     await db.weights.put({
@@ -332,31 +375,34 @@ export async function logWeight(date: DateKey, kg: number, note?: string): Promi
       note: note?.trim() || undefined,
       createdAt: existing?.createdAt ?? Date.now(),
     });
-    // Keep the profile weight in step with the most recent weigh-in.
-    const latest = await db.weights.orderBy('date').last();
-    const p = await db.profile.get('me');
-    if (p && latest && latest.date === date) {
-      const next = { ...p, weightKg: latest.kg, updatedAt: Date.now() };
-      if (!p.customTargets) next.targets = suggestTargets(next);
-      await db.profile.put(next);
-    }
+    await syncProfileWeight();
   });
 }
 
+/**
+ * Edit a weigh-in. The same range check as logging applies, and moving it onto
+ * a day that already has a weigh-in is refused rather than silently replacing it.
+ */
 export async function updateWeight(id: string, patch: { kg?: number; date?: DateKey; note?: string }): Promise<void> {
+  if (patch.kg !== undefined) assertWeightInRange(patch.kg);
   await withProgression(async () => {
     const w = await db.weights.get(id);
     if (!w) return;
     if (patch.date && patch.date !== w.date) {
       const clash = await db.weights.where('date').equals(patch.date).first();
-      if (clash) await db.weights.delete(clash.id);
+      if (clash) throw new Error('There is already a weigh-in on that day. Edit or delete that one instead.');
     }
-    await db.weights.put({ ...w, ...patch });
+    const kg = patch.kg !== undefined ? Math.round(patch.kg * 100) / 100 : w.kg;
+    await db.weights.put({ ...w, ...patch, kg });
+    await syncProfileWeight();
   });
 }
 
 export async function deleteWeight(id: string): Promise<void> {
-  await withProgression(() => db.weights.delete(id));
+  await withProgression(async () => {
+    await db.weights.delete(id);
+    await syncProfileWeight();
+  });
 }
 
 // ───────────────────────────── Quests ─────────────────────────────
@@ -389,6 +435,7 @@ function cleanQuest(input: QuestInput): QuestInput {
     ...input,
     title: input.title.trim().slice(0, LIMITS.questTitle) || 'New quest',
     description: input.description?.trim() || undefined,
+    auto: input.auto && autoRuleFits(input.auto, input.recurrence) ? input.auto : undefined,
     xp: clamp(Math.round(input.xp), LIMITS.questXp.min, LIMITS.questXp.max),
   };
 }
@@ -412,7 +459,9 @@ export async function updateQuest(id: string, patch: Partial<QuestInput>): Promi
   await withProgression(async () => {
     const q = await db.quests.get(id);
     if (!q) return;
-    await db.quests.put({ ...q, ...cleanQuest({ ...q, ...patch }) });
+    // The repeat setting is fixed once a quest exists: completions are keyed by
+    // period, so switching daily → weekly → one-time would let the same quest pay again.
+    await db.quests.put({ ...q, ...cleanQuest({ ...q, ...patch, recurrence: q.recurrence }) });
   });
 }
 

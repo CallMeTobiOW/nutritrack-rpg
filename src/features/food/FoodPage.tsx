@@ -133,8 +133,8 @@ export default function FoodPage() {
             <Card key={slot} padded={false} className="overflow-hidden">
               <div className="flex items-center gap-2 px-4 pb-2 pt-3">
                 <h2 className="font-hud flex-1 text-lg font-bold">{MEAL_LABELS[slot]}</h2>
-                <span className="font-hud tabular text-sm font-semibold text-muted">{Math.round(mealKcal)} kcal</span>
-                <IconButton label={`${MEAL_LABELS[slot]} options`} onClick={() => setMenuFor(slot)} className="-mr-1 h-8 w-8">
+                <span className="font-hud tabular text-sm font-semibold text-muted">{Math.round(mealKcal).toLocaleString()} kcal</span>
+                <IconButton label={`${MEAL_LABELS[slot]} options`} onClick={() => setMenuFor(slot)} className="-my-1.5 -mr-2.5 h-11 w-11">
                   <MoreHorizontal size={18} />
                 </IconButton>
               </div>
@@ -156,7 +156,7 @@ export default function FoodPage() {
                           </span>
                         </span>
                         <span className="tabular text-sm font-semibold">
-                          {e.food.per100.energy === undefined ? '—' : Math.round((e.food.per100.energy * e.amount) / 100)}
+                          {e.food.per100.energy === undefined ? '—' : Math.round((e.food.per100.energy * e.amount) / 100).toLocaleString()}
                         </span>
                       </button>
                     </li>

@@ -13,6 +13,8 @@ import { Button } from '../../components/ui/Button';
 import { Label, NumberInput, TextInput } from '../../components/ui/Field';
 import { Segmented } from '../../components/ui/Segmented';
 import { setPendingFood } from './pendingFood';
+import { per100Problem } from '../../lib/food';
+import { useGoBack } from '../../hooks/useGoBack';
 
 type Basis = '100' | 'serving';
 type Values = Partial<Record<NutrientKey | 'salt', number>>;
@@ -52,6 +54,8 @@ export default function CustomFoodPage() {
   const [showMicros, setShowMicros] = useState(false);
   const [error, setError] = useState('');
   const [loaded, setLoaded] = useState(!editId);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const goBack = useGoBack();
 
   useEffect(() => {
     if (!editId) return;
@@ -81,8 +85,8 @@ export default function CustomFoodPage() {
     if (!name.trim()) return setError('Give the food a name.');
     if (values.energy === undefined) return setError('Energy (kcal) is required so it can count towards your calories.');
     if (basis === 'serving' && !(servingAmount && servingAmount > 0)) return setError('Enter the serving size in grams/ml.');
-    for (const [k, v] of Object.entries(values)) {
-      if (v !== undefined && (v < 0 || !Number.isFinite(v))) return setError(`${k} cannot be negative.`);
+    for (const [k, v] of Object.entries(values) as [NutrientKey | 'salt', number | undefined][]) {
+      if (v !== undefined && (v < 0 || !Number.isFinite(v))) return setError(`${k === 'salt' ? 'Salt' : NUTRIENTS[k].label} cannot be negative.`);
     }
     const factor = basis === 'serving' ? 100 / servingAmount! : 1;
     const per100: NutrientValues = {};
@@ -91,19 +95,19 @@ export default function CustomFoodPage() {
       if (k === 'salt') per100.sodium = saltToSodiumMg(v) * factor;
       else per100[k] = v * factor;
     }
-    const macroMass = (per100.protein ?? 0) + (per100.carbs ?? 0) + (per100.fat ?? 0) + (per100.fiber ?? 0);
-    if (macroMass > 101) return setError('Protein, carbs, fat and fibre add up to more than 100 g per 100 g. Check the values or the serving size.');
+    const problem = per100Problem(per100, unit);
+    if (problem) return setError(problem);
 
     const servings = servingAmount && servingAmount > 0 ? [{ label: servingLabel.trim() || `1 serving (${servingAmount} ${unit})`, amount: servingAmount }] : [];
     const food = await saveCustomFood({ name, brand, barcode, unit, per100, servings }, editId ?? undefined);
     if (meal && date && !editId) {
       if (cameFromAdd) {
         setPendingFood(food.id);
-        navigate(-1);
+        goBack(`/food/add?meal=${meal}&date=${date}&food=${food.id}`);
       } else {
         navigate(`/food/add?meal=${meal}&date=${date}&food=${food.id}`, { replace: true });
       }
-    } else navigate(-1);
+    } else goBack('/food');
   };
 
   if (!loaded) return <Page>{null}</Page>;
@@ -185,15 +189,18 @@ export default function CustomFoodPage() {
         <div className="flex gap-2">
           {editId && (
             <Button
-              variant="secondary"
-              className="!px-4 text-danger"
+              variant={confirmDelete ? 'danger' : 'secondary'}
+              className={cn(!confirmDelete && '!px-4 text-danger')}
               aria-label="Delete food"
               onClick={async () => {
+                // First tap arms the button; the second deletes.
+                if (!confirmDelete) return setConfirmDelete(true);
                 await deleteFood(editId);
-                navigate(-1);
+                goBack('/food');
               }}
             >
               <Trash2 size={18} />
+              {confirmDelete && 'Delete food'}
             </Button>
           )}
           <Button variant="primary" size="lg" block onClick={save}>

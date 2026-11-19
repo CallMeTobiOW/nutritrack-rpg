@@ -17,11 +17,15 @@ export interface Briefing {
   text: string;
 }
 
-export const SPEAKERS: Record<BriefingCategory, { name: string; title: string; accent: string }> = {
-  fantasy: { name: 'Elder Thessa', title: 'Keeper of the Ember Grove', accent: '#f5a524' },
-  commander: { name: 'Commander Ryn Vale', title: 'Orbital Vanguard, Strike Group Aurora', accent: '#38bdf8' },
-  warrior: { name: 'Kael Ironvow', title: 'First Blade of the Ashen Wall', accent: '#f97316' },
-  mentor: { name: 'Mentor Ash', title: 'Trainer of the Lantern Hall', accent: '#a78bfa' },
+/**
+ * `accent` is a fixed hex for the emblem artwork and glows. `ink` is a theme
+ * token for text, so the speaker's name stays readable on the light theme.
+ */
+export const SPEAKERS: Record<BriefingCategory, { name: string; title: string; accent: string; ink: string }> = {
+  fantasy: { name: 'Elder Thessa', title: 'Keeper of the Ember Grove', accent: '#f5a524', ink: 'var(--gold)' },
+  commander: { name: 'Commander Ryn Vale', title: 'Orbital Vanguard, Strike Group Aurora', accent: '#38bdf8', ink: 'var(--primary)' },
+  warrior: { name: 'Kael Ironvow', title: 'First Blade of the Ashen Wall', accent: '#f97316', ink: 'var(--orange)' },
+  mentor: { name: 'Mentor Ash', title: 'Trainer of the Lantern Hall', accent: '#a78bfa', ink: 'var(--violet)' },
 };
 
 const fantasy: string[] = [

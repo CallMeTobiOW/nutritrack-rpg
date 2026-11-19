@@ -52,6 +52,32 @@ const KEY_FIELD: Record<TableName, string> = {
   briefings: 'date',
 };
 
+type Row = Record<string, unknown>;
+const isNum = (v: unknown) => typeof v === 'number' && Number.isFinite(v);
+const isStr = (v: unknown) => typeof v === 'string';
+const isObj = (v: unknown) => !!v && typeof v === 'object' && !Array.isArray(v);
+const isDay = (v: unknown) => isStr(v) && /^\d{4}-\d{2}-\d{2}$/.test(v as string);
+
+/**
+ * Field checks for the values the app does maths with. A row that fails would
+ * otherwise restore "successfully" and then show NaN levels or crash a screen.
+ */
+const ROW_CHECKS: Record<TableName, (r: Row) => boolean> = {
+  profile: (r) =>
+    r.id === 'me' && isStr(r.name) && isNum(r.age) && isNum(r.heightCm) && isNum(r.weightKg) &&
+    isObj(r.targets) && ['calories', 'protein', 'carbs', 'fat', 'waterMl'].every((k) => isNum((r.targets as Row)[k])),
+  settings: (r) => r.id === 'settings',
+  foods: (r) => isStr(r.name) && isObj(r.per100),
+  diary: (r) => isDay(r.date) && isNum(r.amount) && isObj(r.food) && isObj((r.food as Row).per100),
+  meals: (r) => isStr(r.name) && Array.isArray(r.items),
+  water: (r) => isDay(r.date) && isNum(r.ml),
+  weights: (r) => isDay(r.date) && isNum(r.kg),
+  quests: (r) => isStr(r.title) && isNum(r.xp) && ['daily', 'weekly', 'once'].includes(r.recurrence as string),
+  xpEvents: (r) => isDay(r.date) && isNum(r.xp) && isStr(r.period),
+  achievements: (r) => isDay(r.date),
+  briefings: (r) => isDay(r.date),
+};
+
 /** Validate the structure of a parsed backup. Throws BackupError with a readable message. */
 export function validateBackup(raw: unknown): BackupFile {
   if (!raw || typeof raw !== 'object') throw new BackupError('This file is not a NutriTrack backup.');
@@ -66,10 +92,15 @@ export function validateBackup(raw: unknown): BackupFile {
     if (!Array.isArray(rows)) throw new BackupError(`The "${table}" section is damaged.`);
     const key = KEY_FIELD[table as TableName];
     for (const row of rows) {
-      if (!row || typeof row !== 'object' || typeof (row as Record<string, unknown>)[key] !== 'string') {
+      if (!isObj(row) || typeof (row as Row)[key] !== 'string' || !ROW_CHECKS[table as TableName](row as Row)) {
         throw new BackupError(`The "${table}" section contains an invalid record.`);
       }
     }
+  }
+  // Restoring replaces everything, so a file without a profile would wipe the player.
+  const profile = (b.data as Partial<Record<TableName, unknown[]>>).profile;
+  if (!Array.isArray(profile) || profile.length === 0) {
+    throw new BackupError('This backup has no player profile, so restoring it would erase your data. Nothing was changed.');
   }
   return b as BackupFile;
 }
