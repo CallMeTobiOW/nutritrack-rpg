@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useState } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { ensureInitialized } from './db/actions';
 import { requestPersistentStorage } from './db/db';
+import { isConnectionLostError, recoverConnection } from './db/recovery';
 import { syncProgression } from './db/progression';
 import { useProfileOrLoading, useSettings } from './hooks/useData';
 import { useApplyTheme } from './hooks/useTheme';
@@ -38,11 +39,20 @@ export function App() {
   useApplyTheme(settings.theme);
   setSoundEnabled(settings.sound);
 
+  const [initAttempt, setInitAttempt] = useState(0);
+
   useEffect(() => {
     ensureInitialized()
       .then(() => syncProgression({ silent: true }))
       .then(() => setReady(true))
-      .catch((e: Error) => setError(e.message || 'Could not open local storage.'));
+      .catch(async (e: Error) => {
+        // iOS can hand us a dead IndexedDB connection on resume: reconnect and retry.
+        if (isConnectionLostError(e) && (await recoverConnection()) === 'reopen') setInitAttempt((n) => n + 1);
+        else setError(e.message || 'Could not open local storage.');
+      });
+  }, [initAttempt]);
+
+  useEffect(() => {
     void requestPersistentStorage();
   }, []);
 

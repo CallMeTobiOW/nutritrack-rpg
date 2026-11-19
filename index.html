@@ -95,6 +95,8 @@
           (document.body || document.documentElement).appendChild(box);
         };
         function onError(e) {
+          // Once the app is on screen, its own error handling takes over.
+          if (mounted()) return;
           errors.push(describe(e));
           // Only take over if the app never managed to render anything.
           setTimeout(function () { if (!mounted()) window.__ntShowBootError(); }, 1500);
