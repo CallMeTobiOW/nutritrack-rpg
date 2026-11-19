@@ -85,8 +85,9 @@ docs/           Setup, hosting and install guides
 - **Diary entries** keep a snapshot of the food, so editing a food later doesn't rewrite history.
 - **XP ledger:** every reward has a deterministic id (`quest:<id>:<period>`,
   `bonus:allDaily:<date>`, `ach:<id>`), so ticking, unticking and re-ticking can't duplicate XP.
-- **Routing** uses hash URLs and relative asset paths, so the app works from any sub-folder
-  (such as `username.github.io/nutritrack-rpg/`) without server configuration.
+- **Routing** uses hash URLs and relative asset paths, so the same build works at a domain root
+  (https://nutritrack-rpg.vercel.app, the live app) or in a sub-folder (the old
+  `callmetobiow.github.io/nutritrack-rpg/` copy) without server configuration.
 
 ## Credits
 

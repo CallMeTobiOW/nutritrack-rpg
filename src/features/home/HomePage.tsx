@@ -15,6 +15,7 @@ import { completeness, progress } from '../../lib/nutrition';
 import { formatVolume } from '../../lib/units';
 import { sfx } from '../../lib/sound';
 import { Page } from '../../components/layout/Page';
+import { MovedNotice } from '../../components/layout/MovedNotice';
 import { Card, SectionTitle } from '../../components/ui/Card';
 import { ProgressRing } from '../../components/ui/ProgressRing';
 import { ProgressBar } from '../../components/ui/ProgressBar';
@@ -53,6 +54,7 @@ export function HomePage() {
       </header>
 
       <div className="space-y-4">
+        <MovedNotice />
         {player && (
           <Link to="/profile" className="block">
             <Card hud className="animate-fade-up flex items-center gap-4">
