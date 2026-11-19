@@ -17,7 +17,8 @@ interface Props {
   meal: MealSlot;
   date: DateKey;
   onClose: () => void;
-  onLogged: () => void;
+  /** Called after the whole tray is logged, with the meal it went to and how many items. */
+  onLogged: (meal: MealSlot, count: number) => void;
 }
 
 /** Review a whole-meal scan: adjust portions, pick the meal, log everything at once. */
@@ -36,7 +37,7 @@ export function MealTraySheet({ open, meal: initialMeal, date, onClose, onLogged
       await addDiaryEntries(items.map((i) => ({ date, meal, food: i.food, foodId: i.food.id, amount: i.amount, servingLabel: i.servingLabel })));
       sfx.tick();
       mealTray.clear();
-      onLogged();
+      onLogged(meal, items.length);
     } catch (e) {
       setError((e as Error).message);
     } finally {
