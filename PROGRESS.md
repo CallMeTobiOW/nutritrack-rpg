@@ -46,6 +46,13 @@ Version 0.1.0 — all ten build phases complete. Built and tested in the cloud; 
 - Whole-meal mode: scan item after item into a tray, adjust portions, log all at once (`addDiaryEntries`).
 - Verified with a scripted browser run using a fake camera feed (upright, sideways and 35° tilted EAN-13s: found in ~0.8 s / ~0.8 s / ~1.8 s from page load). Still to check on the real iPhone.
 
+## v0.6.0 — New home on Vercel (2026-11-19)
+
+- Live address moves to https://nutritrack-rpg.vercel.app (`vercel.json`; Vercel builds `main` and gives every branch a preview address).
+- The old GitHub Pages copy keeps working and shows a "NutriTrack has a new home" card with a four-step guide: save backup, open new address, add to Home Screen, restore.
+- Verified with an emulated iPhone: 14 days of data created on the old address, backed up from the guide, restored on the new address; all 12 data stores identical afterwards (level, streak, diary, foods, weights, XP, achievements).
+- Not carried over (device-only preferences): scanner single/whole-meal mode and the chosen camera; they reset to defaults.
+
 ## v0.5.0 — Ingredients, processing and additives (2026-11-19)
 
 - Ingredients are now read by the app itself (`src/lib/ingredients.ts`): E-numbers and additive names, plus NOVA-style ultra-processing markers (flavourings, glucose syrup, modified starch, emulsifiers, sweeteners, colours…). Used when Open Food Facts has the ingredients text but no analysis.

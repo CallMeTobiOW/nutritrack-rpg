@@ -1,8 +1,9 @@
 # NutriTrack RPG — hosting and installing on iPhone
 
 NutriTrack RPG is a web app (a PWA). To install it on your iPhone it has to be hosted on a
-website with an `https://` address. This guide uses **GitHub Pages**, which is free and gives
-you HTTPS automatically. No Mac, App Store or Apple Developer membership is needed.
+website with an `https://` address. The app now lives on **Vercel** at
+https://nutritrack-rpg.vercel.app (free, HTTPS automatically). It used to live on GitHub Pages,
+which still works and is described below. No Mac, App Store or Apple Developer membership is needed.
 
 ## Why it must be HTTPS
 
@@ -12,11 +13,45 @@ you HTTPS automatically. No Mac, App Store or Apple Developer membership is need
 - **Offline mode:** the service worker that makes the app work without a connection also
   only runs on HTTPS (or `localhost`).
 
-GitHub Pages and Netlify both serve HTTPS automatically.
+Vercel, GitHub Pages and Netlify all serve HTTPS automatically.
 
 ---
 
-## Option A: GitHub Pages (recommended)
+## Current host: Vercel
+
+`vercel.json` holds the settings (build with `npm run build`, publish `dist`, and cache rules
+so the offline service worker always picks up new versions). Vercel builds from GitHub by itself:
+
+- every push to `main` goes live at https://nutritrack-rpg.vercel.app
+- every other branch and pull request gets its own preview address, so changes can be tried on
+  the phone before they go live
+
+GitHub Actions still type-checks, tests and publishes the old GitHub Pages copy on each push.
+
+### One-time setup (already done once, here for reference)
+
+1. Go to https://vercel.com/signup and choose **Continue with GitHub**. Pick the free **Hobby** plan.
+2. Go to https://vercel.com/new. Under **Import Git Repository**, find `nutritrack-rpg` and
+   click **Import**. (If it isn't listed, click **Adjust GitHub App Permissions** and allow it.)
+3. Set **Project Name** to `nutritrack-rpg`. This name becomes the address
+   `nutritrack-rpg.vercel.app`. Leave every other setting as it is; Vercel reads `vercel.json`.
+4. Click **Deploy** and wait about a minute.
+
+If you pick a different project name, change `NEW_HOME_URL` in `src/lib/hosting.ts` to match.
+
+### Moving from the old GitHub Pages address
+
+A new address is a separate app on iPhone, with its own empty storage. The old copy shows a
+**NutriTrack has a new home** card on its Home screen that walks through it:
+
+1. Save a backup (Share sheet, then **Save to Files**).
+2. Open the new address in Safari and add it to the Home Screen.
+3. In the new app, tap **Restore from a backup** on the welcome screen and pick the file.
+4. Check everything is there, then delete the old icon.
+
+---
+
+## Previous host: GitHub Pages
 
 The project already contains `.github/workflows/deploy.yml`. Every time you push to the
 `main` branch, GitHub type-checks the code, runs the tests, builds the app and publishes it.
@@ -82,7 +117,7 @@ Tap **Update** to switch to it. Your data is kept.
 
 ---
 
-## Option B: Netlify Drop (no Git needed, needs a computer browser)
+## Alternative: Netlify Drop (no Git needed, needs a computer browser)
 
 1. On the PC: `npm install` then `npm run build`. This creates a `dist` folder.
 2. Go to https://app.netlify.com/drop and drag the **`dist`** folder onto the page.
