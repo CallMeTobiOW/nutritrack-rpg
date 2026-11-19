@@ -135,7 +135,14 @@ export function healthScore(food: { per100: NutrientValues; unit: 'g' | 'ml'; qu
   }
 
   // Processing and additives.
-  if (q?.nova === 4) minuses.push({ points: -12, text: 'Ultra-processed (NOVA 4)', detail: 'Made mostly from industrial ingredients and additives. Diets high in ultra-processed food are linked to weight gain and heart disease.' });
+  const why = q?.markers?.length ? ` Found: ${q.markers.join(', ')}.` : '';
+  if (q?.nova === 4) {
+    minuses.push({
+      points: -12,
+      text: q.novaEstimated ? 'Ultra-processed (from its ingredients)' : 'Ultra-processed (NOVA 4)',
+      detail: `Made with industrial ingredients you wouldn't cook with at home.${why} Diets high in ultra-processed food are linked to weight gain and heart disease.`,
+    });
+  }
   else if (q?.nova === 3) minuses.push({ points: -4, text: 'Processed (NOVA 3)' });
   else if (q?.nova === 1) pluses.push({ points: 5, text: 'Unprocessed or minimally processed (NOVA 1)' });
 

@@ -14,6 +14,7 @@
  */
 import { NUTRIENT_KEYS, NUTRIENTS, UNIT_PER_GRAM, type NutrientValues } from './nutrients';
 import { additiveCode } from './additives';
+import { analyseIngredients } from './ingredients';
 import type { Food, FoodQuality, NutriScore, Serving } from './models';
 import type { MeasureUnit } from './nutrition';
 
@@ -42,10 +43,12 @@ const FIELDS = [
   'additives_tags',
   'additives_n',
   'categories_tags',
+  'ingredients_text_en',
+  'ingredients_text',
 ].join(',');
 
 /** Bump when parseQuality learns something new, so saved products refresh on their next scan. */
-export const QUALITY_VERSION = 2;
+export const QUALITY_VERSION = 3;
 
 /** Identifies the app to Open Food Facts, as their API guidelines ask. No personal data. */
 const APP_ID = 'app_name=NutriTrackRPG';
@@ -74,6 +77,8 @@ export interface OffProduct {
   additives_tags?: string[];
   additives_n?: number | string;
   categories_tags?: string[];
+  ingredients_text_en?: string;
+  ingredients_text?: string;
 }
 
 const num = (v: unknown): number | undefined => {
@@ -177,6 +182,21 @@ export function parseQuality(p: OffProduct): FoodQuality {
   if (fv !== undefined && fv >= 0 && fv <= 100) q.fruitVeg = fv;
   const cats = (p.categories_tags ?? []).filter((c) => c.startsWith('en:'));
   if (cats.length) q.categories = cats.slice(-4);
+  // When Open Food Facts has the ingredients but hasn't analysed them, analyse them here.
+  const text = (p.ingredients_text_en || p.ingredients_text || '').trim();
+  if (text) {
+    q.ingredients = text.slice(0, 3000);
+    q.ingredientsFrom = 'off';
+    const a = analyseIngredients(text);
+    if (a) {
+      if (q.additives === undefined) q.additives = a.additives;
+      if (q.nova === undefined) {
+        q.nova = a.nova;
+        q.novaEstimated = true;
+      }
+      if (a.markers.length) q.markers = a.markers;
+    }
+  }
   return q;
 }
 

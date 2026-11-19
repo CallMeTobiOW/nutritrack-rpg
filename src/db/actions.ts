@@ -8,6 +8,7 @@ import { LIMITS, clamp } from '../lib/limits';
 import type {
   DiaryEntry,
   Food,
+  FoodQuality,
   FoodSnapshot,
   MealSlot,
   Profile,
@@ -18,6 +19,7 @@ import type {
 } from '../lib/models';
 import type { NutrientKey } from '../lib/nutrients';
 import { per100Problem } from '../lib/food';
+import { analyseIngredients } from '../lib/ingredients';
 import { autoRuleFits, makeQuestEvent, periodKey, questEventId } from '../lib/quests';
 import { suggestMicroTargets, suggestTargets, type Targets } from '../lib/targets';
 import { db, uid } from './db';
@@ -166,7 +168,7 @@ export async function saveOffFood(food: Omit<Food, 'id'>, opts: { scanned?: bool
     if (!existing) {
       saved = { ...food, id: uid(), ...scan, createdAt: now, updatedAt: now };
     } else if (existing.edited) {
-      saved = { ...existing, imageUrl: existing.imageUrl ?? food.imageUrl, quality: food.quality, fetchedAt: food.fetchedAt ?? now, ...scan, updatedAt: now };
+      saved = { ...existing, imageUrl: existing.imageUrl ?? food.imageUrl, quality: keepPlayerIngredients(existing.quality, food.quality), fetchedAt: food.fetchedAt ?? now, ...scan, updatedAt: now };
     } else {
       saved = {
         ...existing,
@@ -176,7 +178,7 @@ export async function saveOffFood(food: Omit<Food, 'id'>, opts: { scanned?: bool
         unit: food.unit,
         per100: food.per100,
         servings: food.servings.length ? food.servings : existing.servings,
-        quality: food.quality,
+        quality: keepPlayerIngredients(existing.quality, food.quality),
         fetchedAt: food.fetchedAt ?? now,
         ...scan,
         updatedAt: now,
@@ -185,6 +187,41 @@ export async function saveOffFood(food: Omit<Food, 'id'>, opts: { scanned?: bool
     await db.foods.put(saved);
     return saved;
   });
+}
+
+/**
+ * Ingredients the player photographed or typed beat a download that has
+ * none: keep them (and what was worked out from them) across refreshes.
+ */
+function keepPlayerIngredients(old: FoodQuality | undefined, next: FoodQuality | undefined): FoodQuality | undefined {
+  if (!old?.ingredients || old.ingredientsFrom === 'off' || next?.ingredients) return next;
+  const fromPlayer = { ingredients: old.ingredients, ingredientsFrom: old.ingredientsFrom, additives: old.additives, markers: old.markers };
+  const nova = next?.nova !== undefined ? {} : { nova: old.nova, novaEstimated: old.novaEstimated };
+  return { ...next, ...fromPlayer, ...nova };
+}
+
+/**
+ * Save an ingredients list the player photographed or typed, and work out
+ * the additives and processing level from it. A NOVA group given by Open
+ * Food Facts is kept; otherwise the estimate is used.
+ */
+export async function setIngredients(foodId: string, text: string, from: 'photo' | 'typed'): Promise<Food | undefined> {
+  const f = await db.foods.get(foodId);
+  if (!f) return undefined;
+  const clean = text.trim().slice(0, 3000);
+  const a = analyseIngredients(clean);
+  const q: FoodQuality = { ...f.quality, ingredients: clean || undefined, ingredientsFrom: clean ? from : undefined };
+  if (a) {
+    q.additives = a.additives;
+    q.markers = a.markers.length ? a.markers : undefined;
+    if (q.nova === undefined || q.novaEstimated) {
+      q.nova = a.nova;
+      q.novaEstimated = true;
+    }
+  }
+  const next: Food = { ...f, quality: q, updatedAt: Date.now() };
+  await db.foods.put(next);
+  return next;
 }
 
 export type CustomFoodInput = Pick<Food, 'name' | 'brand' | 'unit' | 'per100' | 'servings' | 'barcode'>;
