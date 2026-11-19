@@ -23,6 +23,7 @@ import { suggestMicroTargets, suggestTargets, type Targets } from '../lib/target
 import { db, uid } from './db';
 import { DEFAULT_SETTINGS, QUEST_TEMPLATES, defaultProfile, questFromTemplate } from './defaults';
 import { withProgression } from './progression';
+import { removePendingScan } from './scans';
 
 // ───────────────────────────── Initialisation ─────────────────────────────
 
@@ -153,25 +154,34 @@ export function toSnapshot(f: Pick<Food, 'name' | 'brand' | 'barcode' | 'imageUr
 
 /**
  * Save a product fetched from Open Food Facts. If the barcode is already
- * stored, refresh its nutrition data but keep favourites and usage stats.
+ * stored, refresh its data but keep favourites, usage stats and the last
+ * portion. Values the player corrected by hand are never overwritten.
  */
-export async function saveOffFood(food: Omit<Food, 'id'>, opts: { scanned?: boolean } = {}): Promise<Food> {
+export async function saveOffFood(food: Omit<Food, 'id'>, opts: { scanned?: boolean; scannedAt?: number } = {}): Promise<Food> {
   return withProgression(async () => {
-    const existing = food.barcode ? await db.foods.where('barcode').equals(food.barcode).first() : undefined;
+    const existing = food.barcode ? (await db.foods.where('barcode').equals(food.barcode).toArray())[0] : undefined;
     const now = Date.now();
-    const saved: Food = existing
-      ? {
-          ...existing,
-          name: food.name,
-          brand: food.brand,
-          imageUrl: food.imageUrl ?? existing.imageUrl,
-          unit: food.unit,
-          per100: food.per100,
-          servings: food.servings.length ? food.servings : existing.servings,
-          scanned: existing.scanned || opts.scanned,
-          updatedAt: now,
-        }
-      : { ...food, id: uid(), scanned: opts.scanned, createdAt: now, updatedAt: now };
+    const scan = opts.scanned ? { scanned: true, lastScannedAt: opts.scannedAt ?? now } : {};
+    let saved: Food;
+    if (!existing) {
+      saved = { ...food, id: uid(), ...scan, createdAt: now, updatedAt: now };
+    } else if (existing.edited) {
+      saved = { ...existing, imageUrl: existing.imageUrl ?? food.imageUrl, quality: food.quality, fetchedAt: food.fetchedAt ?? now, ...scan, updatedAt: now };
+    } else {
+      saved = {
+        ...existing,
+        name: food.name,
+        brand: food.brand,
+        imageUrl: food.imageUrl ?? existing.imageUrl,
+        unit: food.unit,
+        per100: food.per100,
+        servings: food.servings.length ? food.servings : existing.servings,
+        quality: food.quality,
+        fetchedAt: food.fetchedAt ?? now,
+        ...scan,
+        updatedAt: now,
+      };
+    }
     await db.foods.put(saved);
     return saved;
   });
@@ -197,9 +207,12 @@ export async function saveCustomFood(input: CustomFoodInput, id?: string): Promi
     per100: input.per100,
     servings: input.servings.filter((s) => s.amount > 0 && s.label.trim()),
     source: existing?.source ?? 'custom',
+    // A downloaded product corrected by hand keeps the player's values from now on.
+    ...(existing?.source === 'off' ? { edited: true } : {}),
     updatedAt: now,
   };
   await db.foods.put(food);
+  if (food.barcode) await removePendingScan(food.barcode);
   return food;
 }
 
@@ -230,25 +243,38 @@ function validAmount(amount: number): number {
 }
 
 export async function addDiaryEntry(input: AddEntryInput): Promise<DiaryEntry> {
+  return withProgression(() => putEntry(input));
+}
+
+/** Log several foods at once (whole-meal scan) with a single progression update. */
+export async function addDiaryEntries(inputs: AddEntryInput[]): Promise<DiaryEntry[]> {
+  if (inputs.length === 0) return [];
   return withProgression(async () => {
-    const foodId = input.foodId ?? ('id' in input.food ? input.food.id : undefined);
-    const entry: DiaryEntry = {
-      id: uid(),
-      date: input.date,
-      meal: input.meal,
-      foodId,
-      food: toSnapshot(input.food),
-      amount: validAmount(input.amount),
-      servingLabel: input.servingLabel,
-      createdAt: Date.now(),
-    };
-    await db.diary.put(entry);
-    if (foodId) {
-      const f = await db.foods.get(foodId);
-      if (f) await db.foods.put({ ...f, lastUsedAt: Date.now(), useCount: f.useCount + 1 });
-    }
-    return entry;
+    const out: DiaryEntry[] = [];
+    for (const input of inputs) out.push(await putEntry(input));
+    return out;
   });
+}
+
+async function putEntry(input: AddEntryInput): Promise<DiaryEntry> {
+  const foodId = input.foodId ?? ('id' in input.food ? input.food.id : undefined);
+  const entry: DiaryEntry = {
+    id: uid(),
+    date: input.date,
+    meal: input.meal,
+    foodId,
+    food: toSnapshot(input.food),
+    amount: validAmount(input.amount),
+    servingLabel: input.servingLabel,
+    createdAt: Date.now(),
+  };
+  await db.diary.put(entry);
+  if (foodId) {
+    const f = await db.foods.get(foodId);
+    // Remember the portion so the next log of this food is one tap.
+    if (f) await db.foods.put({ ...f, lastUsedAt: Date.now(), useCount: f.useCount + 1, lastAmount: entry.amount, lastServingLabel: entry.servingLabel });
+  }
+  return entry;
 }
 
 export async function updateDiaryEntry(id: string, patch: Partial<Pick<DiaryEntry, 'amount' | 'meal' | 'servingLabel'>>): Promise<void> {

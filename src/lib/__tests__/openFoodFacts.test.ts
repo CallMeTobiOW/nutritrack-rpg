@@ -1,12 +1,16 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   RETRY_DELAYS_MS,
+  amountFromText,
   barcodeCandidates,
   isPlausibleBarcode,
   isValidGtin,
+  lookupBarcode,
   normaliseBarcode,
   offProductToFood,
   parseNutriments,
+  parseQuality,
+  parseServings,
   searchProducts,
   upcEToUpcA,
 } from '../openFoodFacts';
@@ -119,7 +123,10 @@ describe('offProductToFood', () => {
     expect(f.brand).toBe('Test Brand');
     expect(f.barcode).toBe('3017624010701');
     expect(f.unit).toBe('g');
-    expect(f.servings).toEqual([{ label: '15 g', amount: 15 }]);
+    expect(f.servings).toEqual([
+      { label: '15 g', amount: 15 },
+      { label: 'Whole pack (400 g)', amount: 400 },
+    ]);
     expect(f.source).toBe('off');
   });
 
@@ -168,5 +175,51 @@ describe('barcodes', () => {
     expect(normaliseBarcode('50-00159')).toBe('5000159');
     expect(normaliseBarcode('abc')).toBeNull();
     expect(normaliseBarcode('123')).toBeNull();
+  });
+});
+
+describe('portions and quality from Open Food Facts', () => {
+  it('reads a serving from the label text when the number is missing', () => {
+    expect(amountFromText('1 bar (45 g)')).toBe(45);
+    expect(amountFromText('33 cl')).toBe(330);
+    expect(amountFromText('0,5 l')).toBe(500);
+    expect(amountFromText('2 biscuits')).toBeUndefined();
+    expect(parseServings({ serving_size: '1 bar (45 g)' }, 'g')).toEqual([{ label: '1 bar (45 g)', amount: 45 }]);
+  });
+
+  it('offers the whole pack for single-serve products, not multipacks or big bags', () => {
+    expect(parseServings({ quantity: '330 ml', product_quantity: 330, product_quantity_unit: 'ml' }, 'ml')).toEqual([
+      { label: 'Whole pack (330 ml)', amount: 330 },
+    ]);
+    expect(parseServings({ quantity: '6 x 25 g', product_quantity: 150, serving_quantity: 25, serving_size: '25 g' }, 'g')).toEqual([
+      { label: '25 g', amount: 25 },
+    ]);
+    expect(parseServings({ quantity: '1 kg', product_quantity: 1000 }, 'g')).toEqual([]);
+    // Same size as the serving: listed once.
+    expect(parseServings({ quantity: '45 g', product_quantity: 45, serving_quantity: 45, serving_size: '1 bar' }, 'g')).toHaveLength(1);
+  });
+
+  it('reads Nutri-Score, NOVA, completeness and alcohol', () => {
+    expect(parseQuality({ nutriscore_grade: 'B', nova_group: '4', states_tags: ['en:nutrition-facts-to-be-completed'], nutriments: { alcohol_100g: 5 } })).toEqual({
+      nutriScore: 'b',
+      nova: 4,
+      incomplete: true,
+      alcohol: 5,
+    });
+    expect(parseQuality({ nutriscore_grade: 'unknown', nova_group: 9 })).toBeUndefined();
+  });
+
+  it('prefers the English product name', () => {
+    expect(offProductToFood({ code: '1', product_name: 'Pâte à tartiner', product_name_en: 'Hazelnut spread' })!.name).toBe('Hazelnut spread');
+  });
+
+  it('asks for English and identifies the app when looking up a barcode', async () => {
+    const fetch = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ status: 1, product: { code: '5000159484695', product_name: 'Bar' } }) });
+    vi.stubGlobal('fetch', fetch);
+    const f = await lookupBarcode('5000159484695');
+    expect(f?.name).toBe('Bar');
+    expect(f?.fetchedAt).toBeTypeOf('number');
+    expect(fetch.mock.calls[0][0]).toMatch(/lc=en&app_name=NutriTrackRPG/);
+    vi.unstubAllGlobals();
   });
 });

@@ -13,7 +13,7 @@
  *    missing: kJ → kcal (÷ 4.184) and salt → sodium (× 0.4).
  */
 import { NUTRIENT_KEYS, NUTRIENTS, UNIT_PER_GRAM, type NutrientValues } from './nutrients';
-import type { Food, Serving } from './models';
+import type { Food, FoodQuality, NutriScore, Serving } from './models';
 import type { MeasureUnit } from './nutrition';
 
 const BASE = 'https://world.openfoodfacts.org';
@@ -22,35 +22,48 @@ const FIELDS = [
   'product_name',
   'product_name_en',
   'generic_name',
+  'generic_name_en',
   'brands',
   'image_front_small_url',
   'image_front_url',
   'image_url',
   'quantity',
+  'product_quantity',
   'product_quantity_unit',
   'serving_size',
   'serving_quantity',
   'serving_quantity_unit',
   'nutrition_data_per',
   'nutriments',
+  'nutriscore_grade',
+  'nova_group',
+  'states_tags',
 ].join(',');
+
+/** Identifies the app to Open Food Facts, as their API guidelines ask. No personal data. */
+const APP_ID = 'app_name=NutriTrackRPG';
 
 export interface OffProduct {
   code?: string;
   product_name?: string;
   product_name_en?: string;
   generic_name?: string;
+  generic_name_en?: string;
   brands?: string;
   image_front_small_url?: string;
   image_front_url?: string;
   image_url?: string;
   quantity?: string;
+  product_quantity?: number | string;
   product_quantity_unit?: string;
   serving_size?: string;
   serving_quantity?: number | string;
   serving_quantity_unit?: string;
   nutrition_data_per?: string;
   nutriments?: Record<string, unknown>;
+  nutriscore_grade?: string;
+  nova_group?: number | string;
+  states_tags?: string[];
 }
 
 const num = (v: unknown): number | undefined => {
@@ -97,29 +110,77 @@ function detectUnit(p: OffProduct): MeasureUnit {
   return 'g';
 }
 
-function parseServing(p: OffProduct): Serving[] {
-  const qty = num(p.serving_quantity);
-  if (!qty || qty <= 0 || qty > 5000) return [];
-  const label = p.serving_size?.trim() || `1 serving (${qty} ${p.serving_quantity_unit ?? 'g'})`;
-  return [{ label, amount: qty }];
+const UNIT_FACTOR: Record<string, number> = { g: 1, ml: 1, cl: 10, l: 1000, kg: 1000 };
+
+/** Read an amount like "30g", "1 bar (45 g)" or "33 cl" from a label. Returns g/ml. */
+export function amountFromText(text: string | undefined): number | undefined {
+  if (!text) return undefined;
+  const m = /(\d+(?:[.,]\d+)?)\s*(kg|g|ml|cl|l)\b/i.exec(text);
+  if (!m) return undefined;
+  const v = Number(m[1].replace(',', '.')) * UNIT_FACTOR[m[2].toLowerCase()];
+  return Number.isFinite(v) && v > 0 ? v : undefined;
 }
 
+const MAX_PORTION = 5000;
+/** Packs bigger than this (a 1 kg bag of rice) are not eaten in one sitting, so no "whole pack" option. */
+const MAX_PACK = 750;
+const r1 = (n: number) => Math.round(n * 10) / 10;
+
+/**
+ * Portions offered for a product: the label's serving (if any) and the whole
+ * pack, unless it is a multipack ("6 x 25 g"), which nobody eats in one go.
+ */
+export function parseServings(p: OffProduct, unit: MeasureUnit): Serving[] {
+  const out: Serving[] = [];
+  const qty = num(p.serving_quantity) ?? amountFromText(p.serving_size);
+  if (qty && qty > 0 && qty <= MAX_PORTION) {
+    const label = p.serving_size?.trim() || `1 serving (${r1(qty)} ${p.serving_quantity_unit ?? unit})`;
+    out.push({ label: label.slice(0, 60), amount: r1(qty) });
+  }
+  const multipack = /\d\s*[x×*]\s*\d/i.test(p.quantity ?? '');
+  const packUnit = (p.product_quantity_unit ?? '').toLowerCase();
+  const pack = num(p.product_quantity) ?? amountFromText(p.quantity);
+  const unitOk = !packUnit || packUnit === unit || (packUnit === 'g' && unit === 'ml') || (packUnit === 'ml' && unit === 'g');
+  if (!multipack && unitOk && pack && pack > 0 && pack <= MAX_PACK && !out.some((s) => Math.abs(s.amount - pack) < 1)) {
+    out.push({ label: `Whole pack (${r1(pack)} ${unit})`, amount: r1(pack) });
+  }
+  return out;
+}
+
+/** Nutri-Score, NOVA group and completeness, when Open Food Facts knows them. */
+export function parseQuality(p: OffProduct): FoodQuality | undefined {
+  const q: FoodQuality = {};
+  const grade = (p.nutriscore_grade ?? '').toLowerCase();
+  if (/^[a-e]$/.test(grade)) q.nutriScore = grade as NutriScore;
+  const nova = num(p.nova_group);
+  if (nova === 1 || nova === 2 || nova === 3 || nova === 4) q.nova = nova;
+  if (p.states_tags?.includes('en:nutrition-facts-to-be-completed')) q.incomplete = true;
+  const alcohol = num(p.nutriments?.['alcohol_100g']) ?? num(p.nutriments?.['alcohol']);
+  if (alcohol !== undefined && alcohol > 0 && alcohol <= 100) q.alcohol = alcohol;
+  return Object.keys(q).length ? q : undefined;
+}
+
+/** English name first (a UK player scanning an imported product), then the product's own language. */
 function cleanName(p: OffProduct): string {
-  return (p.product_name || p.product_name_en || p.generic_name || '').trim();
+  return (p.product_name_en || p.product_name || p.generic_name_en || p.generic_name || '').replace(/\s+/g, ' ').trim();
 }
 
 export function offProductToFood(p: OffProduct, now = Date.now()): Omit<Food, 'id'> | null {
   const name = cleanName(p);
   if (!name && !p.code) return null;
+  const unit = detectUnit(p);
+  const quality = parseQuality(p);
   return {
     name: name || `Product ${p.code}`,
     brand: p.brands?.split(',')[0]?.trim() || undefined,
     barcode: p.code,
     imageUrl: p.image_front_small_url || p.image_front_url || p.image_url || undefined,
     source: 'off',
-    unit: detectUnit(p),
+    unit,
     per100: parseNutriments(p.nutriments),
-    servings: parseServing(p),
+    servings: parseServings(p, unit),
+    ...(quality ? { quality } : {}),
+    fetchedAt: now,
     favorite: false,
     useCount: 0,
     createdAt: now,
@@ -244,7 +305,7 @@ async function getJson(url: string, signal?: AbortSignal): Promise<unknown> {
 export async function lookupBarcode(code: string, signal?: AbortSignal): Promise<Omit<Food, 'id'> | null> {
   for (const candidate of barcodeCandidates(code)) {
     try {
-      const data = (await getJson(`${BASE}/api/v2/product/${candidate}.json?fields=${FIELDS}`, signal)) as {
+      const data = (await getJson(`${BASE}/api/v2/product/${candidate}.json?lc=en&${APP_ID}&fields=${FIELDS}`, signal)) as {
         status?: number;
         product?: OffProduct;
       };
@@ -264,7 +325,7 @@ export async function searchProducts(query: string, signal?: AbortSignal): Promi
   const q = query.trim();
   if (q.length < 2) return [];
   const url =
-    `${BASE}/cgi/search.pl?action=process&json=1&search_simple=1&page_size=24&sort_by=unique_scans_n` +
+    `${BASE}/cgi/search.pl?action=process&json=1&search_simple=1&page_size=24&sort_by=unique_scans_n&lc=en&${APP_ID}` +
     `&search_terms=${encodeURIComponent(q)}&fields=${FIELDS}`;
   const data = (await getJson(url, signal)) as { products?: OffProduct[] };
   return (data.products ?? [])
