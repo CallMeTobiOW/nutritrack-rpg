@@ -3,11 +3,14 @@
  * achievement unlocked, level up). The UI subscribes with
  * useSyncExternalStore; nothing here is persisted.
  */
+import type { TierId } from './rank';
+
 export type Celebration =
   | { kind: 'quest'; title: string; xp: number }
   | { kind: 'bonus'; title: string; xp: number }
   | { kind: 'achievement'; id: string; title: string; xp: number }
-  | { kind: 'level'; level: number; title: string };
+  | { kind: 'level'; level: number; title: string }
+  | { kind: 'badge'; id: string; icon: string; tier: TierId; title: string };
 
 export interface QueuedCelebration {
   key: number;

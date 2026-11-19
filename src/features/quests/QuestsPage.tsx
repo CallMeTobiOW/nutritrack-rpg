@@ -1,6 +1,6 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Check, Crown, Flame, Lock, Pencil, Plus, Sparkles } from 'lucide-react';
+import { Check, Crown, Flame, Hexagon, Lock, Pencil, Plus, Sparkles } from 'lucide-react';
 import { toggleQuest } from '../../db/actions';
 import { useAchievementUnlocks, usePlayer, usePlayerStats, useProfile, useSettings, useXpEvents } from '../../hooks/useData';
 import { useToday } from '../../hooks/useToday';
@@ -21,13 +21,14 @@ import { Icon } from '../../components/ui/Icon';
 import { QuestRow } from './QuestRow';
 import { QuestEditor } from './QuestEditor';
 import { CATEGORY_ORDER, useQuestBoard } from './useQuestBoard';
+import { BadgesPanel } from '../badges/BadgesPanel';
 
-type Tab = 'board' | 'achievements' | 'history';
+type Tab = 'board' | 'badges' | 'achievements' | 'history';
 
 export default function QuestsPage() {
   const today = useToday();
   const [params, setParams] = useSearchParams();
-  const tab = (['board', 'achievements', 'history'].includes(params.get('tab') ?? '') ? params.get('tab') : 'board') as Tab;
+  const tab = (['board', 'badges', 'achievements', 'history'].includes(params.get('tab') ?? '') ? params.get('tab') : 'board') as Tab;
   const board = useQuestBoard(today);
   const player = usePlayer(today);
   const settings = useSettings();
@@ -82,7 +83,8 @@ export default function QuestsPage() {
         onChange={setTab}
         options={[
           { value: 'board', label: 'Board' },
-          { value: 'achievements', label: 'Achievements' },
+          { value: 'badges', label: 'Badges' },
+          { value: 'achievements', label: 'Feats' },
           { value: 'history', label: 'History' },
         ]}
       />
@@ -136,6 +138,7 @@ export default function QuestsPage() {
         </div>
       )}
 
+      {tab === 'badges' && <BadgesPanel />}
       {tab === 'achievements' && <AchievementsGrid />}
       {tab === 'history' && <QuestHistory />}
 
@@ -311,7 +314,7 @@ function QuestHistory() {
             {recent.map((e) => (
               <li key={e.id} className="flex items-center gap-3 py-2 text-sm">
                 <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-surface-3 text-muted">
-                  {e.kind === 'achievement' ? <Sparkles size={15} className="text-gold" /> : e.kind === 'bonus' ? <Crown size={15} className="text-gold" /> : <Check size={15} className="text-success" />}
+                  {e.kind === 'achievement' ? <Sparkles size={15} className="text-gold" /> : e.kind === 'badge' ? <Hexagon size={15} className="text-primary" /> : e.kind === 'bonus' ? <Crown size={15} className="text-gold" /> : <Check size={15} className="text-success" />}
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate">{e.title}</span>

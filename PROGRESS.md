@@ -46,6 +46,19 @@ Version 0.1.0 — all ten build phases complete. Built and tested in the cloud; 
 - Whole-meal mode: scan item after item into a tray, adjust portions, log all at once (`addDiaryEntries`).
 - Verified with a scripted browser run using a fake camera feed (upright, sideways and 35° tilted EAN-13s: found in ~0.8 s / ~0.8 s / ~1.8 s from page load). Still to check on the real iPhone.
 
+## v0.7.0 — Upgradable badges (2026-11-19)
+
+- Nine badges, each climbing the rank ladder (Bronze 5 … Grandmaster 1, Zenith) on one goal: Iron Will (protein), Wellspring (water), Deep Roots (fibre), True Aim (calories ±10%), Balanced Plate (macros), Three Squares (3 meals), Unbroken (food logged), Iron Discipline (score 70+), Flawless (score 100). Code: `src/lib/badges.ts`.
+- Same maths as the rank (`stepRating` in `rank.ts`, shared): each locked day is a win (goal hit) or loss; Δ = 100 · (hit − expected). Expected rises up the ladder, so holding Gold needs ~50% of days, Diamond ~65%, Zenith 90%+. A perfect run reaches Silver in ~7 days, Gold ~16, Zenith ~16 weeks. Badges drop when the goal slips (Tobi's choice) and keep a lifetime peak; 3-match shield after a tier promotion.
+- Only locked days count (same `rankMatches` records; `entries` now stored per day), so editing old days can't farm them; a day with nothing logged is a loss.
+- XP once per ladder step, first time reached (`badge:<id>:<step>` ledger ids): 5 per division in Bronze, +5 per tier, 100 for Zenith.
+- UI: Badges tab on the Quest board (Achievements tab renamed "Feats" to fit four tabs), detail sheet (hit rate, run, best run, wins to next division, hold rate, projection), Top badges on Profile, full-screen moment for claims and new tiers, toast for division-ups, drops shown only on the tab (`settings.badgeSeen`).
+- Tests: `src/lib/__tests__/badges.test.ts` (ladder, pacing, settle sims, drops, peak, shield, XP), badge XP DB tests in `src/db/__tests__/rank.test.ts`.
+
+## v0.6.1 — Water buttons (2026-11-19)
+
+- Water quick-add buttons are now 100 / 250 / 500 ml (Home card and Water page, plus Custom). Players still on the old default buttons (150/250/350/500/750) are moved over on start-up; any other set is left alone (`ensureInitialized`, `src/db/__tests__/settings.test.ts`).
+
 ## v0.6.0 — New home on Vercel (2026-11-19)
 
 - Live address moves to https://nutritrack-rpg.vercel.app (`vercel.json`; Vercel builds `main` and gives every branch a preview address).

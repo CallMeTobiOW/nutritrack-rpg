@@ -124,7 +124,12 @@ export function matchScore(flags: GoalFlags): number {
 /** Score a day's tracked data as a match. */
 export function scoreDay(m: DayMetrics, targets: Targets): RankMatch {
   const flags = goalFlags(m, targets);
-  return { date: m.date, score: matchScore(flags), goals: (Object.keys(SCORE_WEIGHTS) as ScoredGoal[]).filter((k) => flags[k]) };
+  return {
+    date: m.date,
+    score: matchScore(flags),
+    goals: (Object.keys(SCORE_WEIGHTS) as ScoredGoal[]).filter((k) => flags[k]),
+    entries: m.entries,
+  };
 }
 
 /* ─── Rating maths ───────────────────────────────────────────────────── */
@@ -167,6 +172,8 @@ export interface RankMatch {
   score: number;
   /** Which goals were hit, for the match history. */
   goals: ScoredGoal[];
+  /** Diary entries that day (recorded since v0.7; older records leave it out). */
+  entries?: number;
 }
 
 export type MatchResult = 'placement' | 'victory' | 'defeat' | 'draw';
@@ -226,18 +233,8 @@ export function applyMatch(
     };
   }
 
-  const before = rankFromRating(state.rating);
-  const raw = ratingDelta(state.rating, match.score);
-  let rating = Math.max(0, state.rating + raw);
-  let shielded = false;
-  if (raw < 0 && state.shield > 0 && rating < before.tier.floor) {
-    rating = before.tier.floor;
-    shielded = true;
-  }
-  const after = rankFromRating(rating);
+  const { rating, shield, shielded, raw, step } = stepRating(state, match.score);
   const result: MatchResult = raw > 0 ? 'victory' : raw < 0 ? 'defeat' : 'draw';
-  const step = rankStep(after) - rankStep(before);
-  const shield = after.tierIndex > before.tierIndex ? PROMOTION_SHIELD : Math.max(0, state.shield - 1);
 
   return {
     state: {
@@ -260,6 +257,29 @@ export function applyMatch(
       change: step > 0 ? 'promoted' : step < 0 ? 'demoted' : null,
     },
   };
+}
+
+/**
+ * One rated step on the ladder, shared by the competitive rank and badges:
+ * Δ = k · (score − expected), floored at 0, with the promotion shield
+ * stopping a drop out of a tier that was only just reached.
+ */
+export function stepRating(
+  cur: { rating: number; shield: number },
+  score: number,
+  k = K_FACTOR,
+): { rating: number; shield: number; shielded: boolean; raw: number; step: number } {
+  const before = rankFromRating(cur.rating);
+  const raw = Math.round(k * (score / 100 - expectedScore(cur.rating)));
+  let rating = Math.max(0, cur.rating + raw);
+  let shielded = false;
+  if (raw < 0 && cur.shield > 0 && rating < before.tier.floor) {
+    rating = before.tier.floor;
+    shielded = true;
+  }
+  const after = rankFromRating(rating);
+  const shield = after.tierIndex > before.tierIndex ? PROMOTION_SHIELD : Math.max(0, cur.shield - 1);
+  return { rating, shield, shielded, raw, step: rankStep(after) - rankStep(before) };
 }
 
 export interface RankHistory {

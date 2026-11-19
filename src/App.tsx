@@ -13,6 +13,7 @@ import { Celebrations } from './components/layout/Celebrations';
 import { UpdatePrompt } from './components/layout/UpdatePrompt';
 import { BriefingGate } from './features/briefing/BriefingOverlay';
 import { RankChangeGate } from './features/rank/RankChangeOverlay';
+import { BadgeChangeGate } from './features/badges/BadgeChangeOverlay';
 import { HomePage } from './features/home/HomePage';
 import { Onboarding } from './features/onboarding/Onboarding';
 import { Splash } from './components/layout/Splash';
@@ -93,6 +94,7 @@ export function App() {
       <NavUnlessFullscreen />
       <BriefingGate today={today} />
       <RankChangeGate today={today} />
+      <BadgeChangeGate today={today} />
       <Celebrations />
       <UpdatePrompt />
     </>
