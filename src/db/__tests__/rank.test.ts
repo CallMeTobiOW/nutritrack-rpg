@@ -117,3 +117,45 @@ describe('rank season', () => {
     expect((await db.rankMatches.toArray()).map((r) => r.date)).toEqual([day1, addDays(day1, 1), addDays(day1, 2), addDays(day1, 3)]);
   });
 });
+
+describe('badges', () => {
+  const badgeRows = async () => (await db.xpEvents.toArray()).filter((e) => e.kind === 'badge');
+
+  it('pays each badge step once, from locked days only, and never twice', async () => {
+    for (let i = 0; i < 4; i++) await logPerfectDay(addDays(day1, i));
+    // Nothing is locked yet, so no badge XP.
+    expect(await badgeRows()).toHaveLength(0);
+
+    setToday(addDays(day1, 5));
+    await syncProgression({ silent: true });
+    const locked = await db.rankMatches.toArray();
+    expect(locked).toHaveLength(4);
+    expect(locked[0].entries).toBe(3);
+
+    const rows = await badgeRows();
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.find((r) => r.id === 'badge:iron-will:1')).toMatchObject({ refId: 'iron-will', xp: 5, title: 'Iron Will: Bronze 4' });
+    // Every badge was won on all four days, so every badge pays the same steps.
+    const perBadge = new Set(rows.map((r) => r.refId));
+    expect(perBadge.size).toBe(9);
+
+    // Missed days lower the rating but never take paid XP back, and re-syncing pays nothing new.
+    setToday(addDays(day1, 12));
+    await syncProgression({ silent: true });
+    await syncProgression({ silent: true });
+    const after = await badgeRows();
+    expect(after.map((r) => r.id).sort()).toEqual(rows.map((r) => r.id).sort());
+  });
+
+  it('editing a locked day changes nothing', async () => {
+    await logPerfectDay(day1);
+    await logPerfectDay(addDays(day1, 1));
+    setToday(addDays(day1, 3));
+    await syncProgression({ silent: true });
+    const before = await badgeRows();
+    expect(before.length).toBeGreaterThan(0);
+    for (const e of await db.diary.toArray()) await deleteDiaryEntry(e.id);
+    await syncProgression({ silent: true });
+    expect(await badgeRows()).toEqual(before);
+  });
+});

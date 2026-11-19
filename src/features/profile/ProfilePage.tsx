@@ -1,9 +1,9 @@
 import { useMemo, type ReactNode } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { BarChart3, Swords, ChevronRight, Droplet, Flag, Flame, Medal, Scale, Settings, SlidersHorizontal, Star, UserRound } from 'lucide-react';
+import { BarChart3, Swords, ChevronRight, Droplet, Flag, Flame, Hexagon, Medal, Scale, Settings, SlidersHorizontal, Star, UserRound } from 'lucide-react';
 import { db } from '../../db/db';
-import { useAchievementUnlocks, usePlayer, useRank, usePlayerStats, useProfile, useSettings, useWeights } from '../../hooks/useData';
+import { useAchievementUnlocks, useBadges, usePlayer, useRank, usePlayerStats, useProfile, useSettings, useWeights } from '../../hooks/useData';
 import { useToday } from '../../hooks/useToday';
 import { ACHIEVEMENTS, TIER_COLORS } from '../../lib/achievements';
 import { addDays, formatLongDate } from '../../lib/dates';
@@ -17,6 +17,9 @@ import { PageHeader } from '../../components/ui/Misc';
 import { Icon } from '../../components/ui/Icon';
 import { LevelBadge } from '../../components/game/LevelBadge';
 import { XpBar } from '../../components/game/XpBar';
+import { BadgeCrest } from '../badges/BadgesPanel';
+import { tierTextColor } from '../../components/game/RankEmblem';
+import { stepOf } from '../../lib/badges';
 
 export default function ProfilePage() {
   const today = useToday();
@@ -56,6 +59,12 @@ export default function ProfilePage() {
     [unlocks],
   );
 
+  const badges = useBadges(today);
+  const topBadges = useMemo(
+    () => (badges ? badges.standings.filter((b) => b.claimed).sort((a, b) => b.locked.rating - a.locked.rating).slice(0, 3) : []),
+    [badges],
+  );
+
   const consistency = loggedLast30 === undefined ? 0 : Math.round((loggedLast30 / 30) * 100);
   const upcoming = player ? nextRank(player.level.level) : null;
 
@@ -82,16 +91,42 @@ export default function ProfilePage() {
             <ProfileStat label="Total XP" value={player.xp.toLocaleString()} />
             <ProfileStat label="Streak" value={`${player.streak.current}d`} sub={`best ${player.streak.best}d`} />
             <ProfileStat label="Quests" value={String(player.questsCompleted)} />
-            <ProfileStat label="Badges" value={`${unlocks?.length ?? 0}/${ACHIEVEMENTS.length}`} />
+            <ProfileStat label="Badges" value={badges ? `${badges.standings.filter((b) => b.claimed).length}/${badges.standings.length}` : '–'} sub="claimed" />
             <ProfileStat label="Consistency" value={`${consistency}%`} sub="days logged, 30d" />
             <ProfileStat label="Days logged" value={String(stats?.daysLogged ?? 0)} />
           </div>
         </Card>
       )}
 
+      {topBadges.length > 0 && (
+        <Card className="mb-4">
+          <SectionTitle
+            action={
+              <Link to="/quests?tab=badges" className="flex items-center text-xs font-semibold text-primary">
+                All badges <ChevronRight size={14} />
+              </Link>
+            }
+          >
+            Top badges
+          </SectionTitle>
+          <div className="grid grid-cols-3 gap-2">
+            {topBadges.map((b) => (
+              <Link key={b.def.id} to="/quests?tab=badges" className="flex flex-col items-center text-center">
+                <BadgeCrest b={b} size={46} />
+                <span className="mt-1 text-[11px] font-semibold leading-tight">{b.def.title}</span>
+                <span className="font-hud text-sm font-bold leading-tight" style={{ color: tierTextColor(b.rank.tier.id) }}>
+                  {b.rank.label}
+                </span>
+                {stepOf(b.locked.peak) > stepOf(b.locked.rating) && <span className="text-[10px] text-faint">Peak {b.peakRank.label}</span>}
+              </Link>
+            ))}
+          </div>
+        </Card>
+      )}
+
       {recentBadges.length > 0 && (
         <Card className="mb-4">
-          <SectionTitle>Recent badges</SectionTitle>
+          <SectionTitle>Recent achievements</SectionTitle>
           <div className="no-scrollbar -mx-1 flex gap-3 overflow-x-auto px-1">
             {recentBadges.map((a) => (
               <button key={a.id} type="button" onClick={() => navigate('/quests?tab=achievements')} className="flex w-16 shrink-0 flex-col items-center text-center">
@@ -129,6 +164,7 @@ export default function ProfilePage() {
         <MenuRow icon={<Scale size={19} />} title="Weight tracker" sub={weights?.length ? `Latest ${formatWeight(weights[weights.length - 1].kg, weightUnit)}` : 'Log your first weigh-in'} to="/profile/weight" />
         <MenuRow icon={<Droplet size={19} />} title="Hydration" sub="Water log and history" to="/water" />
         <MenuRow icon={<BarChart3 size={19} />} title="Statistics" sub="Averages, trends and consistency" to="/profile/stats" />
+        <MenuRow icon={<Hexagon size={19} />} title="Badges" sub="Nine goals, each on the rank ladder" to="/quests?tab=badges" />
         <MenuRow icon={<Medal size={19} />} title="Achievements" sub={`${unlocks?.length ?? 0} of ${ACHIEVEMENTS.length} unlocked`} to="/quests?tab=achievements" />
         <MenuRow icon={<Settings size={19} />} title="Settings & data" sub="Theme, sound, backup, privacy" to="/profile/settings" />
       </Card>

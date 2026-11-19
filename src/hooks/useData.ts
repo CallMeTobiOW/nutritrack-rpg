@@ -11,7 +11,8 @@ import type { Profile, Settings, XpEvent } from '../lib/models';
 import { computeDayMetrics, type DayMetrics } from '../lib/quests';
 import { activeDays, computePlayerStats, dayMetricsFor, totalXp } from '../lib/stats';
 import { computeStreak } from '../lib/streaks';
-import { buildRankView, pendingDates, scoreDay, type RankView } from '../lib/rank';
+import { buildRankView, pendingDates, scoreDay, type RankMatch, type RankView } from '../lib/rank';
+import { buildBadgeView, type BadgeSeen, type BadgeStanding } from '../lib/badges';
 import { levelFromXp, rankTitle } from '../lib/xp';
 
 const FALLBACK_PROFILE = defaultProfile(0);
@@ -143,8 +144,18 @@ export interface RankData extends RankView {
   seenStep: number | undefined;
 }
 
-/** Competitive rank: the locked ladder standing plus a live projection of unlocked days. */
-export function useRank(today: DateKey): RankData | undefined {
+interface RankInputs {
+  /** Locked matches (official). */
+  locked: RankMatch[];
+  /** Unlocked days (normally yesterday and today) scored as they stand. */
+  pending: RankMatch[];
+  seasonStart: DateKey;
+  seenStep: number | undefined;
+  badgeSeen: BadgeSeen | undefined;
+}
+
+/** Locked match results plus a live score for the days not locked yet: the input to rank and badges. */
+function useRankInputs(today: DateKey): RankInputs | undefined {
   const profile = useProfile();
   const data = useLiveQuery(async () => {
     // Plain getAll reads only (iOS cursor bug).
@@ -158,12 +169,36 @@ export function useRank(today: DateKey): RankData | undefined {
       db.diary.where('date').between(from, today, true, true).toArray(),
       db.water.where('date').between(from, today, true, true).toArray(),
     ]);
-    return { matches, seasonStart, seenStep: settings?.rankSeenStep, dates, diary, water };
+    return { matches, seasonStart, seenStep: settings?.rankSeenStep, badgeSeen: settings?.badgeSeen, dates, diary, water };
   }, [today]);
   return useMemo(() => {
     if (!data) return undefined;
     const metrics = dayMetricsFor(data.dates, data.diary, data.water, []);
     const pending = data.dates.map((d) => scoreDay(metrics.get(d)!, profile.targets));
-    return { ...buildRankView(data.matches, pending), seasonStart: data.seasonStart, seenStep: data.seenStep };
+    return { locked: data.matches, pending, seasonStart: data.seasonStart, seenStep: data.seenStep, badgeSeen: data.badgeSeen };
   }, [data, profile.targets]);
+}
+
+/** Competitive rank: the locked ladder standing plus a live projection of unlocked days. */
+export function useRank(today: DateKey): RankData | undefined {
+  const inputs = useRankInputs(today);
+  return useMemo(
+    () => (inputs ? { ...buildRankView(inputs.locked, inputs.pending), seasonStart: inputs.seasonStart, seenStep: inputs.seenStep } : undefined),
+    [inputs],
+  );
+}
+
+export interface BadgeData {
+  standings: BadgeStanding[];
+  /** Steps last shown to the player (undefined until first set). */
+  seen: BadgeSeen | undefined;
+}
+
+/** Every badge's locked standing, lifetime peak and live projection. */
+export function useBadges(today: DateKey): BadgeData | undefined {
+  const inputs = useRankInputs(today);
+  return useMemo(
+    () => (inputs ? { standings: buildBadgeView(inputs.locked, inputs.pending, today), seen: inputs.badgeSeen } : undefined),
+    [inputs, today],
+  );
 }
