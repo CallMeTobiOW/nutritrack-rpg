@@ -14,7 +14,6 @@
  */
 import { NUTRIENT_KEYS, NUTRIENTS, UNIT_PER_GRAM, type NutrientValues } from './nutrients';
 import { additiveCode } from './additives';
-import type { Supermarket } from '../data/supermarkets';
 import { analyseIngredients } from './ingredients';
 import type { Food, FoodQuality, NutriScore, Serving } from './models';
 import type { MeasureUnit } from './nutrition';
@@ -412,38 +411,6 @@ export async function searchProducts(query: string, signal?: AbortSignal): Promi
     }
   }
   return out;
-}
-
-/**
- * Products from one supermarket: its own-brand range (brand tag) and
- * everything Open Food Facts lists as sold there (store tag), UK first.
- * With search words the words narrow it; without, the most scanned come first.
- * If the tags find nothing (a tag may be spelled differently), the shop name
- * is added to the words instead.
- */
-export async function searchShop(shop: Supermarket, query: string, signal?: AbortSignal): Promise<Omit<Food, 'id'>[]> {
-  const q = query.trim();
-  const settled = async (promises: Promise<Omit<Food, 'id'>[]>[]) => {
-    const r = await Promise.allSettled(promises);
-    if (r.every((x) => x.status === 'rejected')) throw (r[0] as PromiseRejectedResult).reason;
-    return r.flatMap((x) => (x.status === 'fulfilled' ? x.value : []));
-  };
-  const byTag = (field: 'brands' | 'stores', tag: string) =>
-    q.length >= 2
-      ? fetchSearch(searchUrl(q, `${UK_ONLY}&tagtype_1=${field}&tag_contains_1=contains&tag_1=${encodeURIComponent(tag)}`), signal)
-      : fetchSearch(
-          `${BASE}/api/v2/search?${field}_tags=${encodeURIComponent(tag)}&countries_tags=en:united-kingdom&sort_by=unique_scans_n&page_size=40&lc=en&${APP_ID}&fields=${FIELDS}`,
-          signal,
-        );
-  let found = await settled([byTag('brands', shop.brandTag), byTag('stores', shop.storeTag)]);
-  if (found.length === 0 && q.length >= 2) found = await fetchSearch(searchUrl(`${q} ${shop.label}`, UK_ONLY), signal);
-  const seen = new Set<string>();
-  return found.filter((f) => {
-    const key = f.barcode ?? `${f.name}|${f.brand}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
 }
 
 /**

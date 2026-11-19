@@ -34,3 +34,16 @@ export function supermarketsOf(food: { brand?: string; stores?: string[] }): Sup
   const text = [food.brand ?? '', ...(food.stores ?? [])].map(normalise).join(' | ');
   return SUPERMARKETS.filter((s) => s.match.test(text));
 }
+
+/** What to tell the player about where a product comes from: "Tesco own brand", "Sold at Asda, Co-op", or both. */
+export function shopLine(food: { brand?: string; stores?: string[] }): string | null {
+  const own = supermarketsOf({ brand: food.brand });
+  const ownIds = new Set(own.map((s) => s.id));
+  const sold = supermarketsOf({ stores: food.stores }).filter((s) => !ownIds.has(s.id));
+  const parts: string[] = [];
+  if (own.length) parts.push(`${own.map((s) => s.label).join(', ')} own brand`);
+  if (sold.length) parts.push(`${own.length ? 'also ' : ''}sold at ${sold.map((s) => s.label).join(', ')}`);
+  if (!parts.length) return null;
+  const line = parts.join(' · ');
+  return line[0].toUpperCase() + line.slice(1);
+}
