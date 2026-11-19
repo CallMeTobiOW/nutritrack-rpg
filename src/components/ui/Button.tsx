@@ -6,8 +6,10 @@ type Size = 'sm' | 'md' | 'lg';
 
 const VARIANTS: Record<Variant, string> = {
   primary:
-    'text-white bg-gradient-to-br from-[#0284c7] to-[#2563eb] shadow-glow ring-1 ring-inset ring-white/15 hover:brightness-110 active:brightness-95',
-  gold: 'text-[#1a1203] bg-gradient-to-br from-gold to-orange shadow-glow-gold hover:brightness-110 active:brightness-95',
+    // #0369a1 → #2563eb keeps white text at ≥ 5:1 across the whole gradient.
+    'text-white bg-gradient-to-br from-[#0369a1] to-[#2563eb] shadow-glow ring-1 ring-inset ring-white/15 hover:brightness-110 active:brightness-95',
+  // Fill tokens stay bright in both themes so the dark label keeps its contrast.
+  gold: 'text-[#1a1203] bg-gradient-to-br from-[var(--gold-fill)] to-[var(--orange-fill)] shadow-glow-gold hover:brightness-110 active:brightness-95',
   secondary: 'bg-surface-3 text-text border border-line hover:border-line-strong active:bg-surface-2',
   ghost: 'text-muted hover:text-text hover:bg-surface-3/60',
   danger: 'text-white bg-danger hover:brightness-110',
@@ -52,7 +54,7 @@ export function IconButton({ className, label, ...rest }: ButtonHTMLAttributes<H
       aria-label={label}
       title={label}
       className={cn(
-        'inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-muted transition-colors hover:bg-surface-3 hover:text-text active:scale-95 disabled:opacity-40',
+        'inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-muted transition-colors hover:bg-surface-3 hover:text-text active:scale-95 disabled:opacity-40',
         className,
       )}
       {...rest}

@@ -133,10 +133,10 @@ function BriefingOverlay({ today, briefing, onClose }: { today: DateKey; briefin
               <div className="flex items-center gap-3">
                 <SpeakerEmblem category={current.category} size={52} />
                 <div className="min-w-0">
-                  <p className="font-hud text-lg font-bold leading-tight" style={{ color: speaker.accent }}>
+                  <p className="font-hud text-lg font-bold leading-tight" style={{ color: speaker.ink }}>
                     {speaker.name}
                   </p>
-                  <p className="truncate text-xs text-muted">{speaker.title}</p>
+                  <p className="text-xs leading-snug text-muted">{speaker.title}</p>
                 </div>
               </div>
               <blockquote key={current.id} className="mt-5 text-[19px] font-medium leading-relaxed text-text">

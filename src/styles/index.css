@@ -20,12 +20,14 @@
   --line-strong: rgb(130 165 255 / 0.26);
   --text: #e9eef8;
   --muted: #95a1b8;
-  --faint: #5f6b85;
+  --faint: #8793ad; /* ≥ 4.5:1 on --bg and raised panels */
 
   --primary: #38bdf8;
   --primary-2: #3b82f6;
   --gold: #f5c046;
   --orange: #fb923c;
+  --gold-fill: #f5c046; /* button fills under dark text */
+  --orange-fill: #fb923c;
   --success: #34d399;
   --danger: #f87171;
   --violet: #a78bfa;
@@ -54,20 +56,23 @@
   --line-strong: rgb(15 23 42 / 0.18);
   --text: #0c1324;
   --muted: #55607a;
-  --faint: #8a94a9;
+  /* Light accents are darkened so small text on white reaches 4.5:1. */
+  --faint: #5f697e;
 
-  --primary: #0284c7;
+  --primary: #0369a1;
   --primary-2: #2563eb;
-  --gold: #b7791f;
-  --orange: #ea580c;
-  --success: #059669;
+  --gold: #955c06;
+  --gold-fill: #f0b43c;
+  --orange-fill: #f59a4a;
+  --orange: #c2410c;
+  --success: #047857;
   --danger: #dc2626;
   --violet: #7c3aed;
   --cyan: #0891b2;
 
   --protein: #2563eb;
-  --carbs: #059669;
-  --fat: #d97706;
+  --carbs: #047857;
+  --fat: #a14c08;
 
   --glow-primary: 0 0 18px rgb(2 132 199 / 0.18);
   --glow-gold: 0 0 18px rgb(183 121 31 / 0.18);

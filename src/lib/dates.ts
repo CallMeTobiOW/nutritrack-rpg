@@ -22,10 +22,15 @@ export function fromDateKey(key: DateKey): Date {
   return new Date(y, m - 1, d);
 }
 
+/**
+ * Calendar arithmetic on date keys. Done in UTC so it is pure calendar maths:
+ * a local day that a time zone skipped (e.g. Pacific/Apia, 2011-12-30) would
+ * otherwise normalise back to itself and stall loops that step by days.
+ */
 export function addDays(key: DateKey, days: number): DateKey {
-  const d = fromDateKey(key);
-  d.setDate(d.getDate() + days);
-  return toDateKey(d);
+  const [y, m, d] = key.split('-').map(Number);
+  const t = new Date(Date.UTC(y, m - 1, d + days));
+  return `${t.getUTCFullYear()}-${pad(t.getUTCMonth() + 1)}-${pad(t.getUTCDate())}`;
 }
 
 /** Whole days from a to b (b - a). DST-safe because we round. */

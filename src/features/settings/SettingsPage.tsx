@@ -3,7 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { AlertTriangle, Database, Download, Globe, HardDrive, Lock, Share, ShieldCheck, SquarePlus, Trash2, Upload } from 'lucide-react';
 import { ALL_TABLES, db } from '../../db/db';
 import { updateSettings } from '../../db/actions';
-import { createBackup, deliverBackup, restoreBackup, wipeAllData } from '../../db/backup';
+import { BackupError, createBackup, deliverBackup, restoreBackup, validateBackup, wipeAllData } from '../../db/backup';
 import { useSettings } from '../../hooks/useData';
 import { sfx } from '../../lib/sound';
 import { plural } from '../../lib/food';
@@ -126,9 +126,10 @@ export default function SettingsPage() {
               e.target.value = '';
               if (!f) return;
               try {
-                setPendingRestore(JSON.parse(await f.text()));
-              } catch {
-                setStatus('That file could not be read as a backup.');
+                // Check the file before asking to replace data, so a bad file never reaches the confirm step.
+                setPendingRestore(validateBackup(JSON.parse(await f.text())));
+              } catch (err) {
+                setStatus(err instanceof BackupError ? err.message : 'That file could not be read as a backup.');
               }
             }}
           />
@@ -281,19 +282,27 @@ function InstallCard() {
       <ol className="space-y-2 text-sm">
         <li className="flex items-center gap-2">
           <span className="font-hud grid h-6 w-6 place-items-center rounded-full bg-primary/15 text-xs font-bold text-primary">1</span>
-          Open this page in <b>Safari</b>.
+          <span>
+            Open this page in <b>Safari</b>.
+          </span>
         </li>
         <li className="flex items-center gap-2">
           <span className="font-hud grid h-6 w-6 place-items-center rounded-full bg-primary/15 text-xs font-bold text-primary">2</span>
-          Tap <Share size={16} className="text-primary" /> <b>Share</b>.
+          <span>
+            Tap <Share size={16} className="inline align-[-3px] text-primary" /> <b>Share</b>.
+          </span>
         </li>
         <li className="flex items-center gap-2">
           <span className="font-hud grid h-6 w-6 place-items-center rounded-full bg-primary/15 text-xs font-bold text-primary">3</span>
-          Choose <SquarePlus size={16} className="text-primary" /> <b>Add to Home Screen</b>.
+          <span>
+            Choose <SquarePlus size={16} className="inline align-[-3px] text-primary" /> <b>Add to Home Screen</b>.
+          </span>
         </li>
         <li className="flex items-center gap-2">
           <span className="font-hud grid h-6 w-6 place-items-center rounded-full bg-primary/15 text-xs font-bold text-primary">4</span>
-          Name it <b>NUTRITRACK</b> and tap <b>Add</b>.
+          <span>
+            Name it <b>NUTRITRACK</b> and tap <b>Add</b>.
+          </span>
         </li>
       </ol>
       <p className="mt-3 text-xs text-faint">

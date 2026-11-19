@@ -81,7 +81,8 @@ export function WeightField({
   hint?: string;
   id?: string;
 }) {
-  const display = kg === undefined ? undefined : Math.round(kgToUnit(kg, unit) * 100) / 100;
+  // One decimal: stored kilograms are rounded, so two decimals in pounds show drift (180 lb as 180.01).
+  const display = kg === undefined ? undefined : Math.round(kgToUnit(kg, unit) * 10) / 10;
   return (
     <div>
       <Label htmlFor={id} hint={hint}>

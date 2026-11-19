@@ -1,5 +1,44 @@
-import { describe, expect, it } from 'vitest';
-import { barcodeCandidates, isValidGtin, normaliseBarcode, offProductToFood, parseNutriments, upcEToUpcA } from '../openFoodFacts';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import {
+  RETRY_DELAYS_MS,
+  barcodeCandidates,
+  isPlausibleBarcode,
+  isValidGtin,
+  normaliseBarcode,
+  offProductToFood,
+  parseNutriments,
+  searchProducts,
+  upcEToUpcA,
+} from '../openFoodFacts';
+
+describe('typed barcodes', () => {
+  it('accepts real codes and rejects a wrong check digit', () => {
+    expect(isPlausibleBarcode('5449000000996')).toBe(true); // EAN-13
+    expect(isPlausibleBarcode('3017620422003')).toBe(true);
+    expect(isPlausibleBarcode('1234567890123')).toBe(false);
+    expect(isPlausibleBarcode('5449000000997')).toBe(false);
+  });
+});
+
+describe('busy service', () => {
+  afterEach(() => vi.unstubAllGlobals());
+  RETRY_DELAYS_MS.splice(0, RETRY_DELAYS_MS.length, 0, 0);
+  const ok = { ok: true, status: 200, json: async () => ({ products: [{ code: '1', product_name: 'Banana', nutriments: { 'energy-kcal_100g': 89 } }] }) };
+  const busy = { ok: false, status: 503, json: async () => ({}) };
+
+  it('retries a 503 and then succeeds', async () => {
+    const fetch = vi.fn().mockResolvedValueOnce(busy).mockRejectedValueOnce(new TypeError('Failed to fetch')).mockResolvedValueOnce(ok);
+    vi.stubGlobal('fetch', fetch);
+    const results = await searchProducts('banana');
+    expect(fetch).toHaveBeenCalledTimes(3);
+    expect(results[0]?.name).toBe('Banana');
+  });
+
+  it('gives an honest message when the service keeps failing', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(busy));
+    await expect(searchProducts('banana')).rejects.toThrow(/may be busy/);
+  });
+});
 
 // Shape mirrors a real Open Food Facts v2 product response (values in g per 100 g).
 const spread = {

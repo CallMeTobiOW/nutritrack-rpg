@@ -29,6 +29,17 @@ describe('backup', () => {
     expect(() => validateBackup({ app: 'nutritrack-rpg', formatVersion: 1, data: { water: [{ ml: 5 }] } })).toThrow(/invalid record/);
   });
 
+  it('rejects damaged values and backups with no profile, leaving data untouched', async () => {
+    await addWater('2026-11-17', 500);
+    const good = JSON.parse(JSON.stringify(await createBackup()));
+    const garbage = { ...good, data: { ...good.data, profile: [{ id: 'me', name: 5, targets: 'x' }] } };
+    expect(() => validateBackup(garbage)).toThrow(/profile.*invalid record/);
+    const badXp = { ...good, data: { ...good.data, xpEvents: [{ id: 'x', xp: 'lots', date: 7, period: 'once' }] } };
+    expect(() => validateBackup(badXp)).toThrow(/xpEvents/);
+    await expect(restoreBackup({ app: 'nutritrack-rpg', formatVersion: 1, data: {} })).rejects.toThrow(/no player profile/);
+    expect(await db.water.count()).toBe(1);
+  });
+
   it('wipe leaves a fresh, usable app', async () => {
     await addWater('2026-11-17', 500);
     await wipeAllData();

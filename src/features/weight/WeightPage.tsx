@@ -6,6 +6,7 @@ import { useProfile, useSettings, useWeights } from '../../hooks/useData';
 import { useToday } from '../../hooks/useToday';
 import { addDays, formatLongDate, formatShortDate, type DateKey } from '../../lib/dates';
 import type { WeightEntry } from '../../lib/models';
+import { LIMITS } from '../../lib/limits';
 import { movingAverage, weeklyWeightAverages } from '../../lib/stats';
 import { formatWeight, kgToUnit, unitToKg, type WeightUnit } from '../../lib/units';
 import { Page } from '../../components/layout/Page';
@@ -84,7 +85,7 @@ export default function WeightPage() {
           <button type="button" onClick={() => setGoalOpen(true)} className="rounded-xl transition active:bg-surface-3">
             <div className="hud-label !text-[10px]">Goal</div>
             <div className="font-hud tabular text-gradient-gold text-2xl font-bold">{goal ? kgToUnit(goal, unit).toFixed(1) : 'Set'}</div>
-            <div className="text-xs text-muted">{goal ? `${kgToUnit(Math.abs(current - goal), unit).toFixed(1)} ${unit} to go` : 'tap to set'}</div>
+            <div className="text-xs text-muted">{goal ? (goalProgress >= 1 ? 'goal reached' : `${kgToUnit(Math.abs(current - goal), unit).toFixed(1)} ${unit} to go`) : 'tap to set'}</div>
           </button>
         </div>
         {goal !== undefined && (
@@ -258,11 +259,13 @@ function EditWeightSheet({ entry, unit, today, onClose }: { entry: WeightEntry |
   const [date, setDate] = useState<DateKey>(today);
   const [note, setNote] = useState('');
   const [loadedId, setLoadedId] = useState<string | null>(null);
+  const [error, setError] = useState('');
   if (entry && entry.id !== loadedId) {
     setLoadedId(entry.id);
-    setV(Math.round(kgToUnit(entry.kg, unit) * 100) / 100);
+    setV(Math.round(kgToUnit(entry.kg, unit) * 10) / 10);
     setDate(entry.date);
     setNote(entry.note ?? '');
+    setError('');
   }
   if (!entry) return null;
   return (
@@ -292,7 +295,12 @@ function EditWeightSheet({ entry, unit, today, onClose }: { entry: WeightEntry |
             block
             disabled={v === undefined}
             onClick={async () => {
-              await updateWeight(entry.id, { kg: unitToKg(v!, unit), date, note: note.trim() || undefined });
+              setError('');
+              try {
+                await updateWeight(entry.id, { kg: unitToKg(v!, unit), date, note: note.trim() || undefined });
+              } catch (e) {
+                return setError((e as Error).message);
+              }
               setLoadedId(null);
               onClose();
             }}
@@ -322,13 +330,38 @@ function EditWeightSheet({ entry, unit, today, onClose }: { entry: WeightEntry |
           <Label htmlFor="ew-note" hint="Optional">Note</Label>
           <TextInput id="ew-note" value={note} onChange={(e) => setNote(e.target.value)} maxLength={80} />
         </div>
+        {error && (
+          <p role="alert" className="text-sm text-danger">
+            {error}
+          </p>
+        )}
       </div>
     </Sheet>
   );
 }
 
 function GoalSheet({ open, unit, goal, onClose }: { open: boolean; unit: WeightUnit; goal?: number; onClose: () => void }) {
-  const [v, setV] = useState<number | undefined>(goal === undefined ? undefined : Math.round(kgToUnit(goal, unit) * 10) / 10);
+  const toDisplay = (kg?: number) => (kg === undefined ? undefined : Math.round(kgToUnit(kg, unit) * 10) / 10);
+  const [v, setV] = useState<number | undefined>(toDisplay(goal));
+  const [error, setError] = useState('');
+  // Refill the field with the current goal each time the sheet opens (or the unit changes).
+  const loadKey = open ? `${goal ?? ''}|${unit}` : null;
+  const [loadedKey, setLoadedKey] = useState<string | null>(null);
+  if (loadKey !== loadedKey) {
+    setLoadedKey(loadKey);
+    if (loadKey !== null) {
+      setV(toDisplay(goal));
+      setError('');
+    }
+  }
+  const save = async () => {
+    const kg = unitToKg(v!, unit);
+    if (!(kg >= LIMITS.weightKg.min && kg <= LIMITS.weightKg.max)) {
+      return setError(`Enter a goal between ${formatWeight(LIMITS.weightKg.min, unit)} and ${formatWeight(LIMITS.weightKg.max, unit)}.`);
+    }
+    await saveProfile({ goalWeightKg: kg });
+    onClose();
+  };
   return (
     <Sheet
       open={open}
@@ -339,10 +372,7 @@ function GoalSheet({ open, unit, goal, onClose }: { open: boolean; unit: WeightU
           variant="gold"
           block
           disabled={v === undefined}
-          onClick={async () => {
-            await saveProfile({ goalWeightKg: unitToKg(v!, unit) });
-            onClose();
-          }}
+          onClick={save}
         >
           <Target size={18} /> Set goal
         </Button>
@@ -351,6 +381,11 @@ function GoalSheet({ open, unit, goal, onClose }: { open: boolean; unit: WeightU
       <div className="py-2">
         <Label htmlFor="goal-w">Target weight</Label>
         <NumberInput id="goal-w" value={v} onValue={setV} suffix={unit} />
+        {error && (
+          <p role="alert" className="mt-2 text-sm text-danger">
+            {error}
+          </p>
+        )}
         <p className="mt-2 text-xs text-faint">A sustainable pace is around 0.25–1% of body weight per week.</p>
       </div>
     </Sheet>

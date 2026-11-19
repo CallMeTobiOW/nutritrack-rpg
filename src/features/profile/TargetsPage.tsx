@@ -6,6 +6,7 @@ import { MINERAL_KEYS, NUTRIENTS, VITAMIN_KEYS, type NutrientKey } from '../../l
 import { REFERENCE_SOURCE } from '../../lib/references';
 import { ACTIVITY_LEVELS, CALORIE_FLOOR, bmrMifflin, isBelowCalorieFloor, suggestTargets, tdee, type Targets } from '../../lib/targets';
 import type { Profile } from '../../lib/models';
+import { LIMITS } from '../../lib/limits';
 import { Page } from '../../components/layout/Page';
 import { Card, SectionTitle } from '../../components/ui/Card';
 import { Chip, PageHeader } from '../../components/ui/Misc';
@@ -40,6 +41,11 @@ function TargetsForm({ profile, saved, setSaved }: { profile: Profile; saved: bo
   const mismatch = t.calories ? Math.abs(macroKcal - t.calories) / t.calories > 0.08 : false;
   const belowFloor = t.calories !== undefined && isBelowCalorieFloor(t.calories, profile.sex);
   const complete = FIELDS.every((f) => t[f.key] !== undefined && t[f.key]! >= 0);
+  const rangeFor = (k: keyof Targets) => (k === 'calories' ? LIMITS.calories : k === 'waterMl' ? LIMITS.waterGoalMl : LIMITS.targetGrams);
+  const bad = FIELDS.find((f) => t[f.key] !== undefined && (t[f.key]! < rangeFor(f.key).min || t[f.key]! > rangeFor(f.key).max));
+  const outOfRange = bad
+    ? `${bad.label} must be between ${rangeFor(bad.key).min.toLocaleString()} and ${rangeFor(bad.key).max.toLocaleString()} ${bad.unit}.`
+    : '';
 
   return (
     <Page>
@@ -119,11 +125,16 @@ function TargetsForm({ profile, saved, setSaved }: { profile: Profile; saved: bo
               <AlertTriangle size={14} className="mt-0.5 shrink-0" /> This is below {CALORIE_FLOOR[profile.sex]} kcal. Very low intakes can be harmful without medical supervision. NutriTrack will never reward eating far below your target.
             </p>
           )}
+          {outOfRange && (
+            <p role="alert" className="mt-2 flex gap-2 text-xs text-danger">
+              <AlertTriangle size={14} className="mt-0.5 shrink-0" /> {outOfRange}
+            </p>
+          )}
           <Button
             variant="primary"
             block
             className="mt-4"
-            disabled={!complete}
+            disabled={!complete || !!outOfRange}
             onClick={async () => {
               await updateTargets(t as Targets);
               setSaved(true);

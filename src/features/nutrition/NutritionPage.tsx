@@ -99,7 +99,7 @@ function MacroView({ m, date }: { m: DayMetrics; date: DateKey }) {
 
         <div className="mt-5">
           <div className="mb-1.5 flex justify-between text-xs text-muted">
-            <span>Calories from macros</span>
+            <span>Calories eaten, split by macro</span>
             <span className="tabular">{Math.round(kcal).toLocaleString()} kcal</span>
           </div>
           <div className="flex h-3 gap-0.5 overflow-hidden rounded-full bg-surface-3">
@@ -185,7 +185,7 @@ function MicroView({ m, keys, title }: { m: DayMetrics; keys: NutrientKey[]; tit
         {m.entries > 0 && (
           <p className="mb-4 flex gap-2 rounded-xl bg-surface-3/60 p-3 text-xs text-muted">
             <Info size={14} className="mt-0.5 shrink-0 text-primary" />
-            {reported} of {keys.length} reported by today&apos;s foods. Most packaged foods only list a few micronutrients, so totals are a minimum. Missing values are never counted as zero.
+            {reported} of {keys.length} reported by the foods logged. Most packaged foods only list a few micronutrients, so totals are a minimum. Missing values are never counted as zero.
           </p>
         )}
         <div className="space-y-4">

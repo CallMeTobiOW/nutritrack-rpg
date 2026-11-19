@@ -4,8 +4,9 @@ import { CameraOff, ChevronLeft, Flashlight, Keyboard, Loader2, PackageSearch, R
 import type { IScannerControls } from '@zxing/browser';
 import { db } from '../../db/db';
 import { useToday } from '../../hooks/useToday';
+import { useGoBack } from '../../hooks/useGoBack';
 import type { Food } from '../../lib/models';
-import { barcodeCandidates, lookupBarcode, normaliseBarcode, OffError } from '../../lib/openFoodFacts';
+import { barcodeCandidates, isPlausibleBarcode, lookupBarcode, normaliseBarcode, OffError } from '../../lib/openFoodFacts';
 import { sfx } from '../../lib/sound';
 import { Button, IconButton } from '../../components/ui/Button';
 import { Sheet } from '../../components/ui/Sheet';
@@ -33,6 +34,7 @@ async function findLocal(code: string): Promise<Food | undefined> {
  */
 export default function ScannerPage() {
   const navigate = useNavigate();
+  const goBack = useGoBack();
   const today = useToday();
   const [params] = useSearchParams();
   const date = params.get('date') ?? today;
@@ -149,7 +151,11 @@ export default function ScannerPage() {
   const submitManual = () => {
     const code = normaliseBarcode(manualCode);
     if (!code) {
-      setManualError('Enter the 8–13 digits printed under the barcode.');
+      setManualError('Enter the 8–14 digits printed under the barcode.');
+      return;
+    }
+    if (!isPlausibleBarcode(code)) {
+      setManualError('That code does not add up. Check each digit against the label.');
       return;
     }
     setManualError('');
@@ -166,7 +172,7 @@ export default function ScannerPage() {
 
       {/* Top bar */}
       <div className="relative z-10 flex items-center gap-2 bg-gradient-to-b from-black/80 to-transparent px-3 pb-6 pt-[max(0.75rem,env(safe-area-inset-top))]">
-        <IconButton label="Back" onClick={() => navigate(-1)} className="text-white hover:bg-white/10 hover:text-white">
+        <IconButton label="Back" onClick={() => goBack('/food')} className="text-white hover:bg-white/10 hover:text-white">
           <ChevronLeft size={26} />
         </IconButton>
         <div className="min-w-0 flex-1">
@@ -291,7 +297,7 @@ export default function ScannerPage() {
         </div>
       </Sheet>
 
-      <PortionSheet target={target} date={date} meal={meal} onClose={resume} onDone={() => navigate(-1)} />
+      <PortionSheet target={target} date={date} meal={meal} onClose={resume} onDone={() => goBack('/food')} />
     </div>
   );
 }
