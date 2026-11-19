@@ -66,7 +66,7 @@ export default function WaterPage() {
 
       <Card className="mb-4">
         <SectionTitle>Quick add</SectionTitle>
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-4 gap-2">
           {settings.waterQuickAmounts.map((a) => (
             <Button key={a} onClick={() => add(a)} className="!h-14 flex-col !gap-0">
               <span className="font-hud text-lg font-bold">+{a}</span>

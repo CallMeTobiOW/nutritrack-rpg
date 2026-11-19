@@ -46,6 +46,10 @@ Version 0.1.0 — all ten build phases complete. Built and tested in the cloud; 
 - Whole-meal mode: scan item after item into a tray, adjust portions, log all at once (`addDiaryEntries`).
 - Verified with a scripted browser run using a fake camera feed (upright, sideways and 35° tilted EAN-13s: found in ~0.8 s / ~0.8 s / ~1.8 s from page load). Still to check on the real iPhone.
 
+## v0.6.1 — Water buttons (2026-11-19)
+
+- Water quick-add buttons are now 100 / 250 / 500 ml (Home card and Water page, plus Custom). Players still on the old default buttons (150/250/350/500/750) are moved over on start-up; any other set is left alone (`ensureInitialized`, `src/db/__tests__/settings.test.ts`).
+
 ## v0.6.0 — New home on Vercel (2026-11-19)
 
 - Live address moves to https://nutritrack-rpg.vercel.app (`vercel.json`; Vercel builds `main` and gives every branch a preview address).

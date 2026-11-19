@@ -205,7 +205,7 @@ function WaterCard() {
   const today = useToday();
   const profile = useProfile();
   const { waterQuickAmounts } = useSettings();
-  const quick = waterQuickAmounts.length ? waterQuickAmounts.slice(0, 3) : [250, 500, 750];
+  const quick = waterQuickAmounts.length ? waterQuickAmounts.slice(0, 3) : [100, 250, 500];
   const m = useDayMetrics(today);
   const ml = m?.waterMl ?? 0;
   const p = progress(ml, profile.targets.waterMl);
