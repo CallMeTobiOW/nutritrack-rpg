@@ -45,6 +45,13 @@ export interface FoodQuality {
   categories?: string[];
   /** Version of this record's format; older records are refreshed when scanned. */
   v?: number;
+  /** The ingredients list, and where it came from. */
+  ingredients?: string;
+  ingredientsFrom?: 'off' | 'photo' | 'typed';
+  /** True when NOVA was worked out by this app from the ingredients, not given by Open Food Facts. */
+  novaEstimated?: boolean;
+  /** Ingredients that mark ultra-processing, e.g. ["flavouring", "glucose syrup"]. */
+  markers?: string[];
 }
 
 /** A food the player has saved, scanned or created. */

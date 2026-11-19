@@ -155,3 +155,28 @@ describe('quick re-log', () => {
     expect(await addDiaryEntries([])).toEqual([]);
   });
 });
+
+describe('ingredients added by the player', () => {
+  it('scores processing and additives from a photographed list, and keeps them across refreshes', async () => {
+    const { setIngredients } = await import('../actions');
+    const saved = await saveOffFood({ name: 'Mystery drink', barcode: BEANS, source: 'off', unit: 'ml', per100: { energy: 20, sugar: 4, fat: 0, satFat: 0, sodium: 10 }, servings: [], favorite: false, useCount: 0, createdAt: 0, updatedAt: 0, quality: { v: QUALITY_VERSION } });
+    const withIngredients = (await setIngredients(saved.id, 'Water, sugar, acid (citric acid), flavourings, colour (E129)', 'photo'))!;
+    expect(withIngredients.quality).toMatchObject({ ingredientsFrom: 'photo', nova: 4, novaEstimated: true });
+    expect(withIngredients.quality!.additives!.sort()).toEqual(['e129', 'e330']);
+
+    // A later download without ingredients keeps the player's list.
+    const refreshed = await saveOffFood({ ...saved, quality: { v: QUALITY_VERSION, nutriScore: 'c' } });
+    expect(refreshed.quality).toMatchObject({ nutriScore: 'c', ingredientsFrom: 'photo', nova: 4 });
+    // A download that has ingredients wins.
+    const fromOff = await saveOffFood({ ...saved, quality: { v: QUALITY_VERSION, ingredients: 'Water', ingredientsFrom: 'off', nova: 1, additives: [] } });
+    expect(fromOff.quality).toMatchObject({ ingredientsFrom: 'off', nova: 1 });
+  });
+
+  it('keeps a NOVA group given by Open Food Facts', async () => {
+    const { setIngredients } = await import('../actions');
+    const saved = await saveOffFood({ name: 'Soup', barcode: '5000159484695', source: 'off', unit: 'g', per100: { energy: 40 }, servings: [], favorite: false, useCount: 0, createdAt: 0, updatedAt: 0, quality: { v: QUALITY_VERSION, nova: 3 } });
+    const f = (await setIngredients(saved.id, 'Tomatoes, flavourings', 'typed'))!;
+    expect(f.quality).toMatchObject({ nova: 3, ingredientsFrom: 'typed', markers: ['flavouring'] });
+    expect(f.quality!.novaEstimated).toBeUndefined();
+  });
+});

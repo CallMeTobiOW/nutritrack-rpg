@@ -52,7 +52,8 @@ export function needsRefresh(food: Food, now = Date.now()): boolean {
   return !food.edited && now - (food.fetchedAt ?? food.updatedAt) > STALE_AFTER_MS;
 }
 
-async function refreshInBackground(food: Food): Promise<void> {
+/** Re-download a saved product quietly; failures keep the saved copy. */
+export async function refreshInBackground(food: Food): Promise<void> {
   if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
   try {
     const remote = await lookupBarcode(food.barcode!);

@@ -19,6 +19,8 @@ import { FoodAvatar } from './FoodAvatar';
 import { NutritionTable, PortionSummary } from './NutritionFacts';
 import { QualityBadges } from './QualityBadges';
 import { HealthCard } from './HealthCard';
+import { IngredientsSheet } from './IngredientsSheet';
+import { needsRefresh, refreshInBackground } from '../../db/scans';
 
 type Target =
   | { mode: 'add'; food: Food | Omit<Food, 'id'>; scanned?: boolean }
@@ -52,6 +54,22 @@ export function PortionSheet({ target, date, meal: initialMeal, onClose, onDone,
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
+  const [ingredientsFor, setIngredientsFor] = useState<Food | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Products saved by an older version (or a while ago) are refreshed when
+  // opened from anywhere, not only when scanned, so their scores are current.
+  useEffect(() => {
+    if (!saved || !needsRefresh(saved) || navigator.onLine === false) return;
+    let live = true;
+    setRefreshing(true);
+    void refreshInBackground(saved).finally(() => live && setRefreshing(false));
+    return () => {
+      live = false;
+    };
+    // Once per opened food.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [saved?.id]);
 
   // Reset the form whenever a different food/entry is opened.
   useEffect(() => {
@@ -120,6 +138,7 @@ export function PortionSheet({ target, date, meal: initialMeal, onClose, onDone,
 
 
   return (
+    <>
     <Sheet
       open
       onClose={onClose}
@@ -168,7 +187,14 @@ export function PortionSheet({ target, date, meal: initialMeal, onClose, onDone,
 
         {target.mode !== 'edit' && current.quality && (current.quality.nutriScore || current.quality.nova) && <QualityBadges quality={current.quality} />}
 
-        {target.mode !== 'edit' && <HealthCard food={current} onOpenFood={target.mode === 'add' ? onOpenFood : undefined} />}
+        {target.mode !== 'edit' && (
+          <HealthCard
+            food={current}
+            onOpenFood={target.mode === 'add' ? onOpenFood : undefined}
+            onAddIngredients={saved ? () => setIngredientsFor(saved) : undefined}
+            refreshing={refreshing}
+          />
+        )}
 
         {issues.length > 0 && (
           <div className="space-y-2 rounded-2xl border border-orange/40 bg-orange/10 p-3 text-sm">
@@ -275,6 +301,8 @@ export function PortionSheet({ target, date, meal: initialMeal, onClose, onDone,
         {showTable && <NutritionTable per100={current.per100} portion={values} unit={food.unit} portionLabel={`${round(amount)} ${food.unit}`} />}
       </div>
     </Sheet>
+    <IngredientsSheet key={ingredientsFor?.id ?? 'none'} food={ingredientsFor} onClose={() => setIngredientsFor(null)} />
+    </>
   );
 }
 

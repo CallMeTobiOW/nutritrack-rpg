@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ChevronRight, Info, Loader2, Sparkles } from 'lucide-react';
+import { Camera, ChevronRight, Info, Loader2, Sparkles } from 'lucide-react';
+import { Button } from '../../components/ui/Button';
 import type { Food, FoodQuality } from '../../lib/models';
 import type { NutrientValues } from '../../lib/nutrients';
 import { BAND_COLOR, BAND_LABEL, healthScore, type ScoreReason } from '../../lib/healthScore';
@@ -15,10 +16,17 @@ interface Props {
   food: { per100: NutrientValues; unit: 'g' | 'ml'; quality?: FoodQuality; barcode?: string };
   /** Open a suggested product (in the portion sheet). Omit to hide suggestions. */
   onOpenFood?: (food: Omit<Food, 'id'>) => void;
+  /** Open the "add ingredients" sheet. Omit when the food is not saved. */
+  onAddIngredients?: () => void;
+  /** True while a fresh copy of the product is being downloaded. */
+  refreshing?: boolean;
 }
 
+const SOURCE_TEXT = { off: 'Open Food Facts', photo: 'your photo', typed: 'what you typed' } as const;
+
 /** 0–100 health rating with the reasons behind it and better choices. */
-export function HealthCard({ food, onOpenFood }: Props) {
+export function HealthCard({ food, onOpenFood, onAddIngredients, refreshing }: Props) {
+  const [showIngredients, setShowIngredients] = useState(false);
   const rating = useMemo(() => healthScore(food), [food]);
   if (!rating) return null;
   const color = BAND_COLOR[rating.band];
@@ -56,12 +64,49 @@ export function HealthCard({ food, onOpenFood }: Props) {
         </>
       )}
 
-      <p className="mt-3 flex gap-1.5 text-xs text-faint">
-        <Info size={13} className="mt-0.5 shrink-0" />
-        {rating.ingredientsChecked
-          ? 'Scored per 100 ' + food.unit + ' on UK traffic-light limits, fibre, protein, processing and additives.'
-          : 'Scored on nutrition only: the ingredients aren’t known, so processing and additives aren’t counted.'}
-      </p>
+      {refreshing && !rating.ingredientsChecked ? (
+        <p className="mt-3 flex items-center gap-2 text-sm text-muted" role="status">
+          <Loader2 size={15} className="animate-spin text-primary" /> Checking the ingredients…
+        </p>
+      ) : !rating.ingredientsChecked ? (
+        <div className="mt-3 rounded-xl border border-orange/40 bg-orange/10 p-3">
+          <p className="text-sm">
+            <span className="font-semibold">Processing and additives not checked yet.</span> Open Food Facts doesn’t have this product’s ingredients.
+          </p>
+          {onAddIngredients && (
+            <Button size="sm" variant="secondary" className="mt-2" onClick={onAddIngredients}>
+              <Camera size={15} /> Add ingredients from the pack
+            </Button>
+          )}
+        </div>
+      ) : (
+        <div className="mt-3 text-xs text-faint">
+          <p className="flex gap-1.5">
+            <Info size={13} className="mt-0.5 shrink-0" />
+            <span>
+              Scored per 100 {food.unit} on UK traffic-light limits, fibre, protein, processing and additives
+              {food.quality?.ingredientsFrom ? `. Ingredients from ${SOURCE_TEXT[food.quality.ingredientsFrom]}.` : '.'}
+              {food.quality?.ingredients && (
+                <>
+                  {' '}
+                  <button type="button" className="font-semibold text-primary" onClick={() => setShowIngredients((v) => !v)}>
+                    {showIngredients ? 'Hide ingredients' : 'Show ingredients'}
+                  </button>
+                </>
+              )}
+              {onAddIngredients && food.quality?.ingredientsFrom && food.quality.ingredientsFrom !== 'off' && (
+                <>
+                  {' · '}
+                  <button type="button" className="font-semibold text-primary" onClick={onAddIngredients}>
+                    Edit
+                  </button>
+                </>
+              )}
+            </span>
+          </p>
+          {showIngredients && <p className="mt-2 rounded-lg bg-surface/60 p-2 text-sm text-muted">{food.quality?.ingredients}</p>}
+        </div>
+      )}
 
       {onOpenFood && rating.score < SUGGEST_BELOW && (food.quality?.categories?.length ?? 0) > 0 && (
         <BetterChoices food={food} score={rating.score} onOpen={onOpenFood} />
@@ -73,38 +118,37 @@ export function HealthCard({ food, onOpenFood }: Props) {
 const SHOW_FIRST = 3;
 
 function ReasonList({ reasons }: { reasons: ScoreReason[] }) {
-  const [open, setOpen] = useState<string | null>(null);
   const [all, setAll] = useState(false);
   const shown = all ? reasons : reasons.slice(0, SHOW_FIRST);
   return (
-    <ul className="mt-2 space-y-1">
+    <ul className="mt-2 space-y-2.5">
       {shown.map((r) => {
         const bad = r.points < 0;
-        const expanded = open === r.text;
         return (
-          <li key={r.text}>
-            <button
-              type="button"
-              disabled={!r.detail}
-              aria-expanded={r.detail ? expanded : undefined}
-              onClick={() => setOpen(expanded ? null : r.text)}
-              className="flex min-h-9 w-full items-start gap-2.5 rounded-lg py-1 text-left text-sm disabled:cursor-default"
+          <li key={r.text} className="flex items-start gap-2.5 text-sm">
+            <span
+              className={cn(
+                'mt-0.5 w-9 shrink-0 rounded-md py-0.5 text-center text-xs font-bold tabular',
+                bad ? 'bg-danger/15 text-danger' : 'bg-success/15 text-success',
+              )}
             >
-              <span
-                className={cn(
-                  'mt-0.5 w-9 shrink-0 rounded-md py-0.5 text-center text-xs font-bold tabular',
-                  bad ? 'bg-danger/15 text-danger' : 'bg-success/15 text-success',
-                )}
-              >
-                {bad ? '' : '+'}
-                {r.points}
-              </span>
-              <span className="min-w-0 flex-1">
-                {r.text}
-                {r.detail && <Info size={13} className="ml-1 inline align-[-2px] text-faint" />}
-                {expanded && <span className="mt-1 block text-xs text-muted">{r.detail}</span>}
-              </span>
-            </button>
+              {bad ? '' : '+'}
+              {r.points}
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="font-medium">{r.text}</p>
+              {r.detail && <p className="mt-0.5 text-xs leading-snug text-muted">{r.detail}</p>}
+              {r.items && (
+                <ul className="mt-1.5 space-y-1 border-l-2 border-line pl-2.5">
+                  {r.items.map((i) => (
+                    <li key={i.name} className="text-xs leading-snug text-muted">
+                      <span className="font-semibold text-text">{i.name}:</span> {i.why}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {r.source && <p className="mt-0.5 text-[11px] text-faint">Source: {r.source}</p>}
+            </div>
           </li>
         );
       })}
