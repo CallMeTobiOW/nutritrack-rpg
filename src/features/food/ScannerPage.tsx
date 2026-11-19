@@ -20,7 +20,7 @@ import { removePendingScan, resolveBarcode, retryPendingScans, type ScanResult }
 import { useToday } from '../../hooks/useToday';
 import { useGoBack } from '../../hooks/useGoBack';
 import { amountLabel, defaultPortion, nutrientsFor } from '../../lib/food';
-import type { Food, PendingScan } from '../../lib/models';
+import { MEAL_LABELS, type Food, type MealSlot, type PendingScan } from '../../lib/models';
 import { isPlausibleBarcode, normaliseBarcode } from '../../lib/openFoodFacts';
 import { hapticTap } from '../../lib/scan/haptics';
 import { BAND_COLOR, healthScore } from '../../lib/healthScore';
@@ -76,6 +76,8 @@ export default function ScannerPage() {
   const [problem, setProblem] = useState<Problem | null>(null);
   const [manual, setManual] = useState(false);
   const [trayOpen, setTrayOpen] = useState(false);
+  /** Set after something is logged: asks whether to scan another or go Home. */
+  const [logged, setLogged] = useState<{ text: string; meal: MealSlot } | null>(null);
   const [lookups, setLookups] = useState<string[]>([]);
   const [flashing, setFlashing] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
@@ -129,7 +131,7 @@ export default function ScannerPage() {
     [say],
   );
 
-  const sheetOpen = !!target || !!problem || manual || trayOpen;
+  const sheetOpen = !!target || !!problem || manual || trayOpen || !!logged;
   const reading = !sheetOpen && (mode === 'meal' || lookups.length === 0);
   const cam = useBarcodeCamera({ videoRef, boxRef, onCode: (c) => void handleCode(c), reading });
 
@@ -361,9 +363,9 @@ export default function ScannerPage() {
         meal={meal}
         date={date}
         onClose={() => setTrayOpen(false)}
-        onLogged={() => {
+        onLogged={(m, count) => {
           setTrayOpen(false);
-          goBack('/food');
+          setLogged({ text: `${count} ${count === 1 ? 'item is' : 'items are'} in your diary.`, meal: m });
         }}
       />
 
@@ -372,9 +374,31 @@ export default function ScannerPage() {
         date={date}
         meal={meal}
         onClose={() => setTarget(null)}
-        onDone={() => goBack('/food')}
+        onDone={(m) => {
+          setLogged({ text: `${target && 'food' in target ? target.food.name : 'The product'} is in your diary.`, meal: m });
+          setTarget(null);
+        }}
         onOpenFood={(f) => setTarget({ mode: 'add', food: f })}
       />
+
+      <Sheet
+        open={!!logged}
+        onClose={() => setLogged(null)}
+        title={logged ? `Logged to ${MEAL_LABELS[logged.meal]}` : 'Logged'}
+        subtitle={logged ? `${logged.text} Scan another product?` : undefined}
+        footer={
+          <div className="grid grid-cols-2 gap-2">
+            <Button variant="secondary" onClick={() => navigate('/', { replace: true })}>
+              No, back to Home
+            </Button>
+            <Button variant="primary" onClick={() => setLogged(null)}>
+              Yes, scan another
+            </Button>
+          </div>
+        }
+      >
+        <p className="py-2 text-sm text-muted">Scanning again keeps the same meal and date.</p>
+      </Sheet>
     </div>
   );
 }
