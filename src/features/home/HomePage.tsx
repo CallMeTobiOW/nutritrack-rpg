@@ -6,7 +6,7 @@ import { db } from '../../db/db';
 import { addWater, toggleQuest } from '../../db/actions';
 import { briefingById } from '../../db/briefing';
 import { SPEAKERS } from '../../data/briefings';
-import { useAchievementUnlocks, useDayMetrics, usePlayer, usePlayerStats, useProfile, useSettings } from '../../hooks/useData';
+import { useAchievementUnlocks, useDayMetrics, usePlayer, useRank, usePlayerStats, useProfile, useSettings } from '../../hooks/useData';
 import { useToday } from '../../hooks/useToday';
 import { ACHIEVEMENTS, TIER_COLORS } from '../../lib/achievements';
 import { formatLongDate, greetingFor } from '../../lib/dates';
@@ -22,6 +22,8 @@ import { Button, IconButton } from '../../components/ui/Button';
 import { Icon } from '../../components/ui/Icon';
 import { LevelBadge } from '../../components/game/LevelBadge';
 import { XpBar } from '../../components/game/XpBar';
+import { RankEmblem, tierTextColor } from '../../components/game/RankEmblem';
+import { PLACEMENT_MATCHES, rankFromRating } from '../../lib/rank';
 import { openBriefing } from '../briefing/BriefingOverlay';
 import { SpeakerEmblem } from '../briefing/SpeakerEmblem';
 import { QuestRow } from '../quests/QuestRow';
@@ -57,7 +59,7 @@ export function HomePage() {
               <LevelBadge level={player.level.level} size={68} />
               <div className="min-w-0 flex-1">
                 <div className="flex items-baseline justify-between gap-2">
-                  <p className="font-hud truncate text-xl font-bold">{player.rank}</p>
+                  <p className="font-hud truncate text-xl font-bold">{player.title}</p>
                   <p className="flex shrink-0 items-center gap-1 text-sm font-semibold text-orange">
                     <Flame size={16} className="drop-shadow-[0_0_6px_var(--orange)]" />
                     {player.streak.current} day{player.streak.current === 1 ? '' : 's'}
@@ -75,6 +77,7 @@ export function HomePage() {
           </Link>
         )}
 
+        <RankCard />
         <CaloriesCard />
         <QuestsCard />
         <WaterCard />
@@ -342,5 +345,44 @@ function AchievementsCard() {
         )}
       </div>
     </Card>
+  );
+}
+
+function RankCard() {
+  const today = useToday();
+  const rank = useRank(today);
+  if (!rank) return null;
+  const state = rank.locked.state;
+  const live = rank.pending.find((o) => o.date === today);
+  const r = rankFromRating(state.rating);
+  const delta = live && live.result !== 'placement' ? live.delta : null;
+
+  return (
+    <Link to="/profile/rank" className="block">
+      <Card className="animate-fade-up flex items-center gap-3 !py-3" style={{ animationDelay: '0.03s' }}>
+        <RankEmblem tier={r.tier.id} division={state.placed ? r.division : null} unranked={!state.placed} size={44} />
+        <div className="min-w-0 flex-1">
+          <p className="hud-label !text-[10px]">Competitive rank</p>
+          <p className="font-hud truncate text-lg font-bold leading-tight" style={state.placed ? { color: tierTextColor(r.tier.id) } : undefined}>
+            {state.placed ? r.label : `Placements ${state.placementsPlayed}/${PLACEMENT_MATCHES}`}
+          </p>
+        </div>
+        {live && (
+          <div className="shrink-0 text-right">
+            <p className="font-hud tabular text-lg font-bold leading-tight">
+              {live.score}
+              <span className="text-xs text-muted">/100</span>
+            </p>
+            <p
+              className="tabular text-xs font-semibold"
+              style={{ color: delta === null ? 'var(--muted)' : delta > 0 ? 'var(--success)' : delta < 0 ? 'var(--danger)' : 'var(--muted)' }}
+            >
+              {delta === null ? "today's match" : `${delta > 0 ? '+' : ''}${delta} RP so far`}
+            </p>
+          </div>
+        )}
+        <ChevronRight size={18} className="shrink-0 text-faint" />
+      </Card>
+    </Link>
   );
 }

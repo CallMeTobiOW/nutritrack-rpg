@@ -313,3 +313,25 @@ export function datesToLock(seasonStart: DateKey, lastLocked: DateKey | null, to
   for (; d <= end; d = addDays(d, 1)) out.push(d);
   return out;
 }
+
+/** Days in the season that aren't locked yet (normally yesterday and today), oldest first. */
+export function pendingDates(seasonStart: DateKey, lastLocked: DateKey | null, today: DateKey): DateKey[] {
+  let d = lastLocked && lastLocked >= seasonStart ? addDays(lastLocked, 1) : seasonStart;
+  const out: DateKey[] = [];
+  for (; d <= today; d = addDays(d, 1)) out.push(d);
+  return out;
+}
+
+export interface RankView {
+  /** Official standing: locked matches only. */
+  locked: RankHistory;
+  /** Locked matches plus today's and yesterday's results so far. */
+  projected: RankHistory;
+  /** Outcomes of the unlocked days, as they stand right now. */
+  pending: MatchOutcome[];
+}
+
+export function buildRankView(locked: RankMatch[], pending: RankMatch[]): RankView {
+  const projected = replayMatches([...locked, ...pending]);
+  return { locked: replayMatches(locked), projected, pending: projected.outcomes.slice(projected.outcomes.length - pending.length) };
+}

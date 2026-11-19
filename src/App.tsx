@@ -12,6 +12,7 @@ import { BottomNav } from './components/layout/BottomNav';
 import { Celebrations } from './components/layout/Celebrations';
 import { UpdatePrompt } from './components/layout/UpdatePrompt';
 import { BriefingGate } from './features/briefing/BriefingOverlay';
+import { RankChangeGate } from './features/rank/RankChangeOverlay';
 import { HomePage } from './features/home/HomePage';
 import { Onboarding } from './features/onboarding/Onboarding';
 import { Splash } from './components/layout/Splash';
@@ -28,6 +29,7 @@ const TargetsPage = lazy(() => import('./features/profile/TargetsPage'));
 const WeightPage = lazy(() => import('./features/weight/WeightPage'));
 const WaterPage = lazy(() => import('./features/water/WaterPage'));
 const StatsPage = lazy(() => import('./features/stats/StatsPage'));
+const RankPage = lazy(() => import('./features/rank/RankPage'));
 const SettingsPage = lazy(() => import('./features/settings/SettingsPage'));
 
 export function App() {
@@ -82,6 +84,7 @@ export function App() {
           <Route path="/profile/targets" element={<TargetsPage />} />
           <Route path="/profile/weight" element={<WeightPage />} />
           <Route path="/profile/stats" element={<StatsPage />} />
+          <Route path="/profile/rank" element={<RankPage />} />
           <Route path="/profile/settings" element={<SettingsPage />} />
           <Route path="/water" element={<WaterPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
@@ -89,6 +92,7 @@ export function App() {
       </Suspense>
       <NavUnlessFullscreen />
       <BriefingGate today={today} />
+      <RankChangeGate today={today} />
       <Celebrations />
       <UpdatePrompt />
     </>

@@ -29,6 +29,13 @@ Version 0.1.0 — all ten build phases complete. Built and tested in the cloud; 
   once the app is on an `https://` address.
 - **iOS launch screens:** generated for iPhone 8/SE up to 17 Pro Max; confirm one shows on install.
 
+## v0.2.0 — Competitive rank (2026-11-19)
+
+- Ladder: Bronze → Silver → Gold → Platinum → Diamond → Master → Grandmaster (divisions 5→1, 100 RP each), then Zenith. Original emblems (`src/components/game/RankEmblem.tsx`).
+- Each day is a match scored 0–100 from daily goals; rating moves by 120 × (score − expected), expected rising from 30 (Bronze) to 90 (Zenith). 5 placement days (capped at Platinum 1), 3-match shield after a tier promotion.
+- A day locks at the end of the following day (`rankMatches` table, DB v2) and is never rewritten; an unlogged day locks as a 0 (defeat), as Tobi chose.
+- Rules and balance simulations: `src/lib/rank.ts`, `src/lib/__tests__/rank.test.ts`, `src/db/__tests__/rank.test.ts`.
+
 ## Ideas for later
 
 - Playwright end-to-end tests inside the repo (the click-through script lives outside it for now).

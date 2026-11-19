@@ -1,15 +1,16 @@
 import { useMemo, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { BarChart3, ChevronRight, Droplet, Flag, Flame, Medal, Scale, Settings, SlidersHorizontal, Star, UserRound } from 'lucide-react';
+import { BarChart3, Swords, ChevronRight, Droplet, Flag, Flame, Medal, Scale, Settings, SlidersHorizontal, Star, UserRound } from 'lucide-react';
 import { db } from '../../db/db';
-import { useAchievementUnlocks, usePlayer, usePlayerStats, useProfile, useSettings, useWeights } from '../../hooks/useData';
+import { useAchievementUnlocks, usePlayer, useRank, usePlayerStats, useProfile, useSettings, useWeights } from '../../hooks/useData';
 import { useToday } from '../../hooks/useToday';
 import { ACHIEVEMENTS, TIER_COLORS } from '../../lib/achievements';
 import { addDays, formatLongDate } from '../../lib/dates';
 import { OBJECTIVES } from '../../lib/targets';
 import { formatWeight } from '../../lib/units';
 import { nextRank } from '../../lib/xp';
+import { PLACEMENT_MATCHES, rankFromRating } from '../../lib/rank';
 import { Page } from '../../components/layout/Page';
 import { Card, SectionTitle } from '../../components/ui/Card';
 import { PageHeader } from '../../components/ui/Misc';
@@ -69,13 +70,13 @@ export default function ProfilePage() {
             <LevelBadge level={player.level.level} size={84} />
             <div className="min-w-0 flex-1">
               <p className="font-hud truncate text-2xl font-bold leading-tight">{profile.name || 'Champion'}</p>
-              <p className="text-gradient-gold font-hud text-lg font-semibold">{player.rank}</p>
+              <p className="text-gradient-gold font-hud text-lg font-semibold">{player.title}</p>
               <p className="text-xs text-muted">{OBJECTIVES[profile.objective].label}</p>
             </div>
           </div>
           <div className="relative mt-4">
             <XpBar level={player.level} />
-            {upcoming && <p className="mt-1 text-xs text-faint">Next rank: {upcoming.title} at level {upcoming.level}</p>}
+            {upcoming && <p className="mt-1 text-xs text-faint">Next title: {upcoming.title} at level {upcoming.level}</p>}
           </div>
           <div className="relative mt-4 grid grid-cols-3 gap-2 text-center">
             <ProfileStat label="Total XP" value={player.xp.toLocaleString()} />
@@ -122,6 +123,7 @@ export default function ProfilePage() {
       )}
 
       <Card padded={false} className="divide-y divide-line overflow-hidden">
+        <RankMenuRow />
         <MenuRow icon={<UserRound size={19} />} title="Personal details" sub="Age, height, activity, objective" to="/profile/details" />
         <MenuRow icon={<SlidersHorizontal size={19} />} title="Goals & targets" sub={`${profile.targets.calories.toLocaleString()} kcal · ${profile.targets.protein} g protein`} to="/profile/targets" />
         <MenuRow icon={<Scale size={19} />} title="Weight tracker" sub={weights?.length ? `Latest ${formatWeight(weights[weights.length - 1].kg, weightUnit)}` : 'Log your first weigh-in'} to="/profile/weight" />
@@ -156,4 +158,12 @@ function MenuRow({ icon, title, sub, to }: { icon: ReactNode; title: string; sub
       <ChevronRight size={18} className="text-faint" />
     </button>
   );
+}
+
+function RankMenuRow() {
+  const today = useToday();
+  const rank = useRank(today);
+  const state = rank?.locked.state;
+  const sub = !state ? 'Loading…' : state.placed ? `${rankFromRating(state.rating).label} · ${state.rating.toLocaleString()} RP` : `Placements ${state.placementsPlayed}/${PLACEMENT_MATCHES}`;
+  return <MenuRow icon={<Swords size={19} />} title="Competitive rank" sub={sub} to="/profile/rank" />;
 }
