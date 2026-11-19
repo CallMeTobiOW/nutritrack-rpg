@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, ChevronDown, ExternalLink, Heart, Pencil, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -18,6 +18,7 @@ import { Chip } from '../../components/ui/Misc';
 import { FoodAvatar } from './FoodAvatar';
 import { NutritionTable, PortionSummary } from './NutritionFacts';
 import { QualityBadges } from './QualityBadges';
+import { HealthCard } from './HealthCard';
 
 type Target =
   | { mode: 'add'; food: Food | Omit<Food, 'id'>; scanned?: boolean }
@@ -31,10 +32,12 @@ interface PortionSheetProps {
   meal: MealSlot;
   onClose: () => void;
   onDone?: (meal: MealSlot) => void;
+  /** Open another product, e.g. a healthier suggestion. Omit to hide suggestions. */
+  onOpenFood?: (food: Omit<Food, 'id'>) => void;
 }
 
 /** Choose a quantity, preview nutrition and add to (or edit in) the diary. */
-export function PortionSheet({ target, date, meal: initialMeal, onClose, onDone }: PortionSheetProps) {
+export function PortionSheet({ target, date, meal: initialMeal, onClose, onDone, onOpenFood }: PortionSheetProps) {
   const food: (FoodSnapshot & { quality?: FoodQuality }) | null = target ? (target.mode === 'edit' ? target.entry.food : target.food) : null;
   const savedId =
     target?.mode === 'edit' ? target.entry.foodId : target && 'id' in target.food ? target.food.id : undefined;
@@ -48,6 +51,7 @@ export function PortionSheet({ target, date, meal: initialMeal, onClose, onDone 
   const [showTable, setShowTable] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
 
   // Reset the form whenever a different food/entry is opened.
   useEffect(() => {
@@ -65,6 +69,8 @@ export function PortionSheet({ target, date, meal: initialMeal, onClose, onDone 
             : presetPortion(options);
     setOptionKey(preset.key);
     setQty(preset.qty);
+    // Opening another food in the same sheet (e.g. a better choice) starts at the top.
+    bodyRef.current?.parentElement?.scrollTo({ top: 0 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [target]);
 
@@ -143,7 +149,7 @@ export function PortionSheet({ target, date, meal: initialMeal, onClose, onDone 
         </div>
       }
     >
-      <div className="space-y-4 pt-1">
+      <div ref={bodyRef} className="space-y-4 pt-1">
         <div className="flex flex-wrap items-center gap-2">
           {isOff ? <Chip color="var(--primary)">Open Food Facts</Chip> : <Chip color="var(--violet)">Custom food</Chip>}
           {food.barcode && <span className="text-xs text-faint tabular">{food.barcode}</span>}
@@ -161,6 +167,8 @@ export function PortionSheet({ target, date, meal: initialMeal, onClose, onDone 
         </div>
 
         {target.mode !== 'edit' && current.quality && (current.quality.nutriScore || current.quality.nova) && <QualityBadges quality={current.quality} />}
+
+        {target.mode !== 'edit' && <HealthCard food={current} onOpenFood={target.mode === 'add' ? onOpenFood : undefined} />}
 
         {issues.length > 0 && (
           <div className="space-y-2 rounded-2xl border border-orange/40 bg-orange/10 p-3 text-sm">

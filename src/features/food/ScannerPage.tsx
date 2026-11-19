@@ -23,6 +23,7 @@ import { amountLabel, defaultPortion, nutrientsFor } from '../../lib/food';
 import type { Food, PendingScan } from '../../lib/models';
 import { isPlausibleBarcode, normaliseBarcode } from '../../lib/openFoodFacts';
 import { hapticTap } from '../../lib/scan/haptics';
+import { BAND_COLOR, healthScore } from '../../lib/healthScore';
 import { sfx } from '../../lib/sound';
 import { cn } from '../../lib/cn';
 import { Button, IconButton } from '../../components/ui/Button';
@@ -366,7 +367,14 @@ export default function ScannerPage() {
         }}
       />
 
-      <PortionSheet target={target} date={date} meal={meal} onClose={() => setTarget(null)} onDone={() => goBack('/food')} />
+      <PortionSheet
+        target={target}
+        date={date}
+        meal={meal}
+        onClose={() => setTarget(null)}
+        onDone={() => goBack('/food')}
+        onOpenFood={(f) => setTarget({ mode: 'add', food: f })}
+      />
     </div>
   );
 }
@@ -461,10 +469,22 @@ function RecentScans({
         {foods.map((f) => {
           const p = defaultPortion(f);
           const kcal = nutrientsFor(f, p.amount).energy;
+          const rating = healthScore(f);
           return (
             <li key={f.id} className="shrink-0">
               <button type="button" onClick={() => onFood(f)} className="flex h-16 w-48 items-center gap-2 rounded-2xl border border-white/15 bg-white/10 px-2.5 text-left backdrop-blur">
-                <FoodAvatar name={f.name} imageUrl={f.imageUrl} size={40} />
+                <span className="relative shrink-0">
+                  <FoodAvatar name={f.name} imageUrl={f.imageUrl} size={40} />
+                  {rating && (
+                    <span
+                      className="absolute -bottom-1 -right-1 grid h-5 min-w-5 place-items-center rounded-md px-0.5 text-[10px] font-bold text-white ring-2 ring-black tabular"
+                      style={{ background: BAND_COLOR[rating.band] }}
+                      aria-label={`Health rating ${rating.score}`}
+                    >
+                      {rating.score}
+                    </span>
+                  )}
+                </span>
                 <span className="min-w-0">
                   <span className="block truncate text-sm font-semibold">{f.name}</span>
                   <span className="block truncate text-xs text-white/65">

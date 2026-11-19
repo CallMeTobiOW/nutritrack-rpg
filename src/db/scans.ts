@@ -13,7 +13,7 @@
  *    so it can be added from the label later without rescanning.
  */
 import type { Food, PendingScan } from '../lib/models';
-import { OffError, barcodeCandidates, lookupBarcode } from '../lib/openFoodFacts';
+import { OffError, QUALITY_VERSION, barcodeCandidates, lookupBarcode } from '../lib/openFoodFacts';
 import { db } from './db';
 import { DEFAULT_SETTINGS } from './defaults';
 import { saveOffFood } from './actions';
@@ -40,8 +40,16 @@ export async function findSavedFood(code: string): Promise<Food | undefined> {
   return undefined;
 }
 
+/**
+ * Downloaded products are refreshed after 30 days (unless the player
+ * corrected the values), and straight away when saved by an older version
+ * of the app that knew less about them (e.g. no additives yet). A refresh of
+ * a corrected product only updates its scores, never its values.
+ */
 export function needsRefresh(food: Food, now = Date.now()): boolean {
-  return food.source === 'off' && !food.edited && !!food.barcode && now - (food.fetchedAt ?? food.updatedAt) > STALE_AFTER_MS;
+  if (food.source !== 'off' || !food.barcode) return false;
+  if ((food.quality?.v ?? 0) < QUALITY_VERSION) return true;
+  return !food.edited && now - (food.fetchedAt ?? food.updatedAt) > STALE_AFTER_MS;
 }
 
 async function refreshInBackground(food: Food): Promise<void> {

@@ -46,6 +46,12 @@ Version 0.1.0 — all ten build phases complete. Built and tested in the cloud; 
 - Whole-meal mode: scan item after item into a tray, adjust portions, log all at once (`addDiaryEntries`).
 - Verified with a scripted browser run using a fake camera feed (upright, sideways and 35° tilted EAN-13s: found in ~0.8 s / ~0.8 s / ~1.8 s from page load). Still to check on the real iPhone.
 
+## v0.4.0 — Health rating and better choices (2026-11-19)
+
+- 0–100 health rating on every food with enough data (`src/lib/healthScore.ts`). Starts at 70; points from UK FSA traffic-light limits (food and drink limits), UK sugar-tax bands for drinks, fibre and protein claim levels, fruit/veg share, NOVA processing, and flagged additives (`src/lib/additives.ts`: Southampton-six dyes with the UK warning, E171, nitrites/nitrates, sweeteners, caramel colours, phosphates, some emulsifiers). Every point is shown as a reason; tap an additive for why.
+- Better choices: up to 3 higher-rated products (≥ +10 and ≥ 55) from the product's most specific Open Food Facts categories, UK first (`src/lib/alternatives.ts`). Tap one to open it.
+- Products saved by v0.3 refresh their data on next scan (`QUALITY_VERSION`). No DB version change.
+
 ## Ideas for later
 
 - Playwright end-to-end tests inside the repo (the click-through script lives outside it for now).

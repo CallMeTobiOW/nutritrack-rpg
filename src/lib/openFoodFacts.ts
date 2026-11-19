@@ -13,6 +13,7 @@
  *    missing: kJ → kcal (÷ 4.184) and salt → sodium (× 0.4).
  */
 import { NUTRIENT_KEYS, NUTRIENTS, UNIT_PER_GRAM, type NutrientValues } from './nutrients';
+import { additiveCode } from './additives';
 import type { Food, FoodQuality, NutriScore, Serving } from './models';
 import type { MeasureUnit } from './nutrition';
 
@@ -38,7 +39,13 @@ const FIELDS = [
   'nutriscore_grade',
   'nova_group',
   'states_tags',
+  'additives_tags',
+  'additives_n',
+  'categories_tags',
 ].join(',');
+
+/** Bump when parseQuality learns something new, so saved products refresh on their next scan. */
+export const QUALITY_VERSION = 2;
 
 /** Identifies the app to Open Food Facts, as their API guidelines ask. No personal data. */
 const APP_ID = 'app_name=NutriTrackRPG';
@@ -64,6 +71,9 @@ export interface OffProduct {
   nutriscore_grade?: string;
   nova_group?: number | string;
   states_tags?: string[];
+  additives_tags?: string[];
+  additives_n?: number | string;
+  categories_tags?: string[];
 }
 
 const num = (v: unknown): number | undefined => {
@@ -147,9 +157,9 @@ export function parseServings(p: OffProduct, unit: MeasureUnit): Serving[] {
   return out;
 }
 
-/** Nutri-Score, NOVA group and completeness, when Open Food Facts knows them. */
-export function parseQuality(p: OffProduct): FoodQuality | undefined {
-  const q: FoodQuality = {};
+/** Nutri-Score, NOVA group, completeness, additives and categories, when Open Food Facts knows them. */
+export function parseQuality(p: OffProduct): FoodQuality {
+  const q: FoodQuality = { v: QUALITY_VERSION };
   const grade = (p.nutriscore_grade ?? '').toLowerCase();
   if (/^[a-e]$/.test(grade)) q.nutriScore = grade as NutriScore;
   const nova = num(p.nova_group);
@@ -157,7 +167,17 @@ export function parseQuality(p: OffProduct): FoodQuality | undefined {
   if (p.states_tags?.includes('en:nutrition-facts-to-be-completed')) q.incomplete = true;
   const alcohol = num(p.nutriments?.['alcohol_100g']) ?? num(p.nutriments?.['alcohol']);
   if (alcohol !== undefined && alcohol > 0 && alcohol <= 100) q.alcohol = alcohol;
-  return Object.keys(q).length ? q : undefined;
+  // additives_n is only set once the ingredients have been analysed; before that, additives are unknown.
+  if (num(p.additives_n) !== undefined || (p.additives_tags?.length ?? 0) > 0) {
+    q.additives = [...new Set((p.additives_tags ?? []).map(additiveCode).filter((c): c is string => !!c))];
+  }
+  const fv =
+    num(p.nutriments?.['fruits-vegetables-legumes-estimate-from-ingredients_100g']) ??
+    num(p.nutriments?.['fruits-vegetables-nuts-estimate-from-ingredients_100g']);
+  if (fv !== undefined && fv >= 0 && fv <= 100) q.fruitVeg = fv;
+  const cats = (p.categories_tags ?? []).filter((c) => c.startsWith('en:'));
+  if (cats.length) q.categories = cats.slice(-4);
+  return q;
 }
 
 /** English name first (a UK player scanning an imported product), then the product's own language. */
@@ -179,7 +199,7 @@ export function offProductToFood(p: OffProduct, now = Date.now()): Omit<Food, 'i
     unit,
     per100: parseNutriments(p.nutriments),
     servings: parseServings(p, unit),
-    ...(quality ? { quality } : {}),
+    quality,
     fetchedAt: now,
     favorite: false,
     useCount: 0,
@@ -331,4 +351,18 @@ export async function searchProducts(query: string, signal?: AbortSignal): Promi
   return (data.products ?? [])
     .map((p) => offProductToFood(p))
     .filter((f): f is Omit<Food, 'id'> => !!f && f.per100.energy !== undefined);
+}
+
+/**
+ * Popular products in an Open Food Facts category, e.g. "en:chocolate-bars".
+ * `country` narrows to products sold there (UK by default).
+ */
+export async function searchCategory(category: string, opts: { country?: string | null; signal?: AbortSignal } = {}): Promise<Omit<Food, 'id'>[]> {
+  const country = opts.country === undefined ? 'en:united-kingdom' : opts.country;
+  const url =
+    `${BASE}/api/v2/search?categories_tags=${encodeURIComponent(category)}` +
+    (country ? `&countries_tags=${encodeURIComponent(country)}` : '') +
+    `&sort_by=unique_scans_n&page_size=40&lc=en&${APP_ID}&fields=${FIELDS}`;
+  const data = (await getJson(url, opts.signal)) as { products?: OffProduct[] };
+  return (data.products ?? []).map((p) => offProductToFood(p)).filter((f): f is Omit<Food, 'id'> => !!f && f.per100.energy !== undefined);
 }

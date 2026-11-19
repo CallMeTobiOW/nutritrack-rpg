@@ -37,6 +37,14 @@ export interface FoodQuality {
   incomplete?: boolean;
   /** Alcohol in % vol. Alcohol carries calories the macros don't, so the calorie check skips it. */
   alcohol?: number;
+  /** Additive E-numbers, e.g. ["e102", "e330"]. Undefined = ingredients not known. */
+  additives?: string[];
+  /** Estimated % of fruit, vegetables, pulses and nuts. */
+  fruitVeg?: number;
+  /** Open Food Facts category tags, most specific last (used to find better alternatives). */
+  categories?: string[];
+  /** Version of this record's format; older records are refreshed when scanned. */
+  v?: number;
 }
 
 /** A food the player has saved, scanned or created. */

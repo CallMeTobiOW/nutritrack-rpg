@@ -233,7 +233,14 @@ export default function AddFoodPage() {
         </div>
       )}
 
-      <PortionSheet target={target} date={date} meal={meal} onClose={() => setTarget(null)} onDone={() => goBack('/food')} />
+      <PortionSheet
+        target={target}
+        date={date}
+        meal={meal}
+        onClose={() => setTarget(null)}
+        onDone={() => goBack('/food')}
+        onOpenFood={(f) => setTarget({ mode: 'add', food: f })}
+      />
       <SavedMealSheet
         meal={mealDetail}
         slot={meal}
