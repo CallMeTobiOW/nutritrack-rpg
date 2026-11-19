@@ -26,6 +26,19 @@ export interface Serving {
 
 export type FoodSource = 'off' | 'custom';
 
+export type NutriScore = 'a' | 'b' | 'c' | 'd' | 'e';
+
+/** Extra facts Open Food Facts gives about a product, shown as badges and warnings. */
+export interface FoodQuality {
+  nutriScore?: NutriScore;
+  /** NOVA processing group: 1 unprocessed … 4 ultra-processed. */
+  nova?: 1 | 2 | 3 | 4;
+  /** Open Food Facts marks the nutrition facts as still to be completed. */
+  incomplete?: boolean;
+  /** Alcohol in % vol. Alcohol carries calories the macros don't, so the calorie check skips it. */
+  alcohol?: number;
+}
+
 /** A food the player has saved, scanned or created. */
 export interface Food {
   id: string;
@@ -41,6 +54,16 @@ export interface Food {
   favorite: boolean;
   /** True when the product was added through the barcode scanner. */
   scanned?: boolean;
+  /** When this product was last scanned (drives "Recent scans"). */
+  lastScannedAt?: number;
+  /** When the Open Food Facts data was last downloaded. */
+  fetchedAt?: number;
+  /** The player corrected this product's values; refreshes must not overwrite them. */
+  edited?: boolean;
+  quality?: FoodQuality;
+  /** The portion last logged, offered first next time (quick re-log). */
+  lastAmount?: number;
+  lastServingLabel?: string;
   /** Recently used foods are those with lastUsedAt set. */
   lastUsedAt?: number;
   useCount: number;
@@ -85,6 +108,13 @@ export interface SavedMeal {
   items: SavedMealItem[];
   createdAt: number;
   lastUsedAt?: number;
+}
+
+export interface PendingScan {
+  code: string;
+  at: number;
+  /** offline: will be looked up when back online. notfound: not in any database yet. */
+  status: 'offline' | 'notfound';
 }
 
 export interface WaterEntry {
@@ -193,6 +223,8 @@ export interface Settings {
   /** Ids of briefings shown in the current cycle, to avoid repeats. */
   seenBriefings: string[];
   lastBackupAt?: number;
+  /** Barcodes scanned that still need attention: looked up later (offline) or added by hand (not found). */
+  pendingScans?: PendingScan[];
   /** Highest level reached, so a level-up is celebrated only the first time. */
   highestLevel?: number;
   /** First day of competitive rank matches (set the first time the app syncs with rank support). */

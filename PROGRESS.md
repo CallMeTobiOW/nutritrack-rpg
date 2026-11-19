@@ -36,6 +36,16 @@ Version 0.1.0 — all ten build phases complete. Built and tested in the cloud; 
 - A day locks at the end of the following day (`rankMatches` table, DB v2) and is never rewritten; an unlogged day locks as a 0 (defeat), as Tobi chose.
 - Rules and balance simulations: `src/lib/rank.ts`, `src/lib/__tests__/rank.test.ts`, `src/db/__tests__/rank.test.ts`.
 
+## v0.3.0 — Barcode scanner upgrade (2026-11-19)
+
+- Reader: ZXing-C++ as WebAssembly (`zxing-wasm`, bundled and precached, works offline) replaces the old JS port. Reads only the viewfinder area (a square around it), one frame at a time, every third frame rotated ±35°, so upright, sideways and diagonal codes scan. A code needs two matching reads and a valid check digit; it is ignored while it stays in view. Code: `src/lib/scan/`, `src/features/food/scanner/useBarcodeCamera.ts`.
+- iPhone camera: prefers the "Back Triple/Dual Wide Camera" (auto macro, sharp up close) and sets 1× zoom; torch, 1×/2× zoom and lens switch where Safari supports them; low-light and "not reading?" hints; haptic tap (iOS 18 switch trick) and beep.
+- Data: English names first, `lc=en`, `app_name` sent to Open Food Facts; label serving parsed from text; "Whole pack" portion (single packs up to 750 g/ml); Nutri-Score, NOVA, completeness, alcohol. Data checks flag missing calories/macros and calories that don't match the macros (`src/lib/foodQuality.ts`), with "Fix values from the pack".
+- Device first: scanned products are saved on scan (instant and offline next time), refreshed after 30 days unless the player corrected them (`Food.edited`). Offline / not-found scans go to a scan inbox (`Settings.pendingScans`), looked up automatically when back online (`src/db/scans.ts`). No DB version change.
+- Quick re-log: the last portion of each food is remembered and preselected; "Recent scans" strip on the scanner.
+- Whole-meal mode: scan item after item into a tray, adjust portions, log all at once (`addDiaryEntries`).
+- Verified with a scripted browser run using a fake camera feed (upright, sideways and 35° tilted EAN-13s: found in ~0.8 s / ~0.8 s / ~1.8 s from page load). Still to check on the real iPhone.
+
 ## Ideas for later
 
 - Playwright end-to-end tests inside the repo (the click-through script lives outside it for now).

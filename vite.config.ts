@@ -41,7 +41,8 @@ export default defineConfig({
         ],
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,svg,png,woff2,webmanifest}'],
+        // .wasm is the barcode reader, precached so scanning works offline.
+        globPatterns: ['**/*.{js,css,html,svg,png,woff2,webmanifest,wasm}'],
         // Only precache the Latin font subsets; other scripts load on demand if ever needed.
         globIgnores: ['**/*-{cyrillic,cyrillic-ext,greek,greek-ext,vietnamese}-*.woff2', 'splash/**'],
         navigateFallback: 'index.html',

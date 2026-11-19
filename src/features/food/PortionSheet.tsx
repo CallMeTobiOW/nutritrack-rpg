@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, ChevronDown, Heart, Pencil, Trash2 } from 'lucide-react';
+import { AlertTriangle, ChevronDown, ExternalLink, Heart, Pencil, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../db/db';
 import { addDiaryEntry, deleteDiaryEntry, saveOffFood, toggleFavorite, updateDiaryEntry } from '../../db/actions';
 import type { DateKey } from '../../lib/dates';
-import { nutrientsFor, portionOptions, round, servingText } from '../../lib/food';
-import { MEAL_LABELS, MEAL_SLOTS, type DiaryEntry, type Food, type FoodSnapshot, type MealSlot } from '../../lib/models';
+import { nutrientsFor, portionOptions, presetPortion, round, servingText } from '../../lib/food';
+import { qualityIssues } from '../../lib/foodQuality';
+import { MEAL_LABELS, MEAL_SLOTS, type DiaryEntry, type Food, type FoodQuality, type FoodSnapshot, type MealSlot } from '../../lib/models';
 import { LIMITS } from '../../lib/limits';
 import { cn } from '../../lib/cn';
 import { sfx } from '../../lib/sound';
@@ -16,10 +17,13 @@ import { NumberInput } from '../../components/ui/Field';
 import { Chip } from '../../components/ui/Misc';
 import { FoodAvatar } from './FoodAvatar';
 import { NutritionTable, PortionSummary } from './NutritionFacts';
+import { QualityBadges } from './QualityBadges';
 
 type Target =
   | { mode: 'add'; food: Food | Omit<Food, 'id'>; scanned?: boolean }
-  | { mode: 'edit'; entry: DiaryEntry };
+  | { mode: 'edit'; entry: DiaryEntry }
+  /** Choose a portion without logging it (whole-meal scan tray). */
+  | { mode: 'pick'; food: Food; amount?: number; servingLabel?: string; onPick: (amount: number, servingLabel?: string) => void };
 
 interface PortionSheetProps {
   target: Target | null;
@@ -31,8 +35,9 @@ interface PortionSheetProps {
 
 /** Choose a quantity, preview nutrition and add to (or edit in) the diary. */
 export function PortionSheet({ target, date, meal: initialMeal, onClose, onDone }: PortionSheetProps) {
-  const food: FoodSnapshot | null = target ? (target.mode === 'add' ? target.food : target.entry.food) : null;
-  const savedId = target?.mode === 'add' && 'id' in target.food ? target.food.id : target?.mode === 'edit' ? target.entry.foodId : undefined;
+  const food: (FoodSnapshot & { quality?: FoodQuality }) | null = target ? (target.mode === 'edit' ? target.entry.food : target.food) : null;
+  const savedId =
+    target?.mode === 'edit' ? target.entry.foodId : target && 'id' in target.food ? target.food.id : undefined;
   const saved = useLiveQuery(() => (savedId ? db.foods.get(savedId) : undefined), [savedId]);
   const navigate = useNavigate();
 
@@ -50,30 +55,26 @@ export function PortionSheet({ target, date, meal: initialMeal, onClose, onDone 
     setError(null);
     setShowTable(false);
     setMeal(target.mode === 'edit' ? target.entry.meal : initialMeal);
-    if (target.mode === 'edit') {
-      const match = options.find((o) => !o.raw && target.entry.servingLabel?.includes(o.label));
-      if (match) {
-        setOptionKey(match.key);
-        setQty(round(target.entry.amount / match.amount, 2));
-      } else {
-        setOptionKey('raw');
-        setQty(round(target.entry.amount, 1));
-      }
-    } else if (options.length > 1) {
-      setOptionKey(options[1].key);
-      setQty(1);
-    } else {
-      setOptionKey('raw');
-      setQty(100);
-    }
+    const preset =
+      target.mode === 'edit'
+        ? presetPortion(options, target.entry.amount, target.entry.servingLabel)
+        : target.mode === 'pick'
+          ? presetPortion(options, target.amount, target.servingLabel)
+          : 'id' in target.food
+            ? presetPortion(options, target.food.lastAmount, target.food.lastServingLabel)
+            : presetPortion(options);
+    setOptionKey(preset.key);
+    setQty(preset.qty);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [target]);
 
   if (!target || !food) return null;
 
+  // In add/pick mode, show the saved food live, so fixes made from here show up straight away.
+  const current = target.mode !== 'edit' && saved ? saved : food;
   const option = options.find((o) => o.key === optionKey) ?? options[0];
   const amount = qty !== undefined && qty > 0 ? qty * option.amount : 0;
-  const values = nutrientsFor(food, amount);
+  const values = nutrientsFor(current, amount);
   const valid = amount >= LIMITS.amount.min && amount <= LIMITS.amount.max;
   const label = servingText(option, qty ?? 0, food.unit);
 
@@ -82,6 +83,10 @@ export function PortionSheet({ target, date, meal: initialMeal, onClose, onDone 
     setBusy(true);
     setError(null);
     try {
+      if (target.mode === 'pick') {
+        target.onPick(amount, label);
+        return;
+      }
       if (target.mode === 'edit') {
         await updateDiaryEntry(target.entry.id, { amount, meal, servingLabel: label });
       } else {
@@ -104,7 +109,9 @@ export function PortionSheet({ target, date, meal: initialMeal, onClose, onDone 
     onClose();
   };
 
-  const isOff = target.mode === 'add' ? target.food.source === 'off' : !!food.barcode;
+  const isOff = target.mode === 'edit' ? !!food.barcode : target.food.source === 'off';
+  const issues = target.mode === 'edit' ? [] : qualityIssues(current);
+
 
   return (
     <Sheet
@@ -129,7 +136,7 @@ export function PortionSheet({ target, date, meal: initialMeal, onClose, onDone 
               </Button>
             )}
             <Button variant="primary" block onClick={submit} disabled={!valid || busy}>
-              {target.mode === 'edit' ? 'Save changes' : `Add to ${MEAL_LABELS[meal]}`}
+              {target.mode === 'edit' ? 'Save changes' : target.mode === 'pick' ? 'Use this portion' : `Add to ${MEAL_LABELS[meal]}`}
               {values.energy !== undefined && valid && <span className="opacity-80">· {Math.round(values.energy)} kcal</span>}
             </Button>
           </div>
@@ -153,10 +160,39 @@ export function PortionSheet({ target, date, meal: initialMeal, onClose, onDone 
           )}
         </div>
 
-        {food.per100.energy === undefined && (
+        {target.mode !== 'edit' && current.quality && (current.quality.nutriScore || current.quality.nova) && <QualityBadges quality={current.quality} />}
+
+        {issues.length > 0 && (
+          <div className="space-y-2 rounded-2xl border border-orange/40 bg-orange/10 p-3 text-sm">
+            {issues.map((i) => (
+              <p key={i.text} className="flex gap-2">
+                <AlertTriangle size={16} className="mt-0.5 shrink-0 text-orange" />
+                <span>{i.text}</span>
+              </p>
+            ))}
+            {saved && (
+              <div className="flex flex-wrap gap-2 pt-1">
+                <Button size="sm" variant="secondary" onClick={() => navigate(`/food/custom?id=${saved.id}`)}>
+                  <Pencil size={14} /> Fix values from the pack
+                </Button>
+                {isOff && food.barcode && (
+                  <a
+                    href={`https://world.openfoodfacts.org/product/${food.barcode}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex min-h-9 items-center gap-1 rounded-xl px-2 text-xs font-semibold text-primary"
+                  >
+                    Improve it for everyone <ExternalLink size={12} />
+                  </a>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+        {target.mode === 'edit' && food.per100.energy === undefined && (
           <div className="flex gap-2 rounded-2xl border border-orange/40 bg-orange/10 p-3 text-sm">
             <AlertTriangle size={18} className="mt-0.5 shrink-0 text-orange" />
-            <p>This food has no calorie information. It will be logged, but it won&apos;t count towards your calories until you add the values as a custom food.</p>
+            <p>This food has no calorie information, so it counts as 0 kcal. Edit the food to add the values from the pack.</p>
           </div>
         )}
 
@@ -203,7 +239,7 @@ export function PortionSheet({ target, date, meal: initialMeal, onClose, onDone 
           )}
         </div>
 
-        <div>
+        {target.mode !== 'pick' && <div>
           <p className="hud-label mb-2">Meal</p>
           <div className="grid grid-cols-4 gap-1.5">
             {MEAL_SLOTS.map((s) => (
@@ -220,7 +256,7 @@ export function PortionSheet({ target, date, meal: initialMeal, onClose, onDone 
               </button>
             ))}
           </div>
-        </div>
+        </div>}
 
         <PortionSummary values={values} />
 
@@ -228,7 +264,7 @@ export function PortionSheet({ target, date, meal: initialMeal, onClose, onDone 
           Full nutrition (per 100 {food.unit} and per portion)
           <ChevronDown size={18} className={cn('transition-transform', showTable && 'rotate-180')} />
         </button>
-        {showTable && <NutritionTable per100={food.per100} portion={values} unit={food.unit} portionLabel={`${round(amount)} ${food.unit}`} />}
+        {showTable && <NutritionTable per100={current.per100} portion={values} unit={food.unit} portionLabel={`${round(amount)} ${food.unit}`} />}
       </div>
     </Sheet>
   );

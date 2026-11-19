@@ -56,6 +56,19 @@ export const sfx = {
     if (!ac) return;
     tone(ac, 1200, 0, 0.07, 'sine', 0.05);
   },
+  /** Crisp double beep for a barcode read. */
+  scan() {
+    const ac = audio();
+    if (!ac) return;
+    tone(ac, 1568, 0, 0.06, 'square', 0.035);
+    tone(ac, 2093, 0.07, 0.09, 'square', 0.035);
+  },
+  /** Low blip when a scan needs attention (not found / offline). */
+  miss() {
+    const ac = audio();
+    if (!ac) return;
+    tone(ac, 330, 0, 0.16, 'triangle', 0.06);
+  },
   /** Low hum for the briefing intro. */
   briefing() {
     const ac = audio();

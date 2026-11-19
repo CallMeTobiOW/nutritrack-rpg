@@ -53,6 +53,29 @@ export function portionOptions(food: Pick<FoodSnapshot, 'unit' | 'servings'>): P
   ];
 }
 
+/**
+ * Which portion option and quantity to show first. With a previous amount
+ * (editing an entry, or re-logging a food) the same portion comes back;
+ * otherwise the label's first serving, else 100 g/ml.
+ */
+export function presetPortion(options: PortionOption[], amount?: number, servingLabel?: string): { key: string; qty: number } {
+  if (amount !== undefined && amount > 0) {
+    const match = servingLabel ? options.find((o) => !o.raw && servingLabel.includes(o.label)) : undefined;
+    if (match) return { key: match.key, qty: round(amount / match.amount, 2) };
+    return { key: 'raw', qty: round(amount, 1) };
+  }
+  if (options.length > 1) return { key: options[1].key, qty: 1 };
+  return { key: 'raw', qty: 100 };
+}
+
+/** The portion to use without asking: the last one logged, else the first serving, else 100 g/ml. */
+export function defaultPortion(food: Pick<Food, 'unit' | 'servings' | 'lastAmount' | 'lastServingLabel'>): { amount: number; servingLabel?: string } {
+  const options = portionOptions(food);
+  const p = presetPortion(options, food.lastAmount, food.lastServingLabel);
+  const option = options.find((o) => o.key === p.key) ?? options[0];
+  return { amount: round(p.qty * option.amount, 1), servingLabel: servingText(option, p.qty, food.unit) };
+}
+
 /** Human label for an eaten amount, e.g. "2 × 1 bar (45 g)" or "150 g". */
 export function amountLabel(amount: number, unit: string, servingLabel?: string): string {
   const grams = `${round(amount)} ${unit}`;
