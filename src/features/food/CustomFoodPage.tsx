@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ChevronDown, Info, Trash2 } from 'lucide-react';
+import { Camera, ChevronDown, Info, Loader2, Trash2 } from 'lucide-react';
 import { db } from '../../db/db';
 import { deleteFood, saveCustomFood } from '../../db/actions';
 import { MICRO_KEYS, NUTRIENTS, type NutrientKey, type NutrientValues } from '../../lib/nutrients';
@@ -14,6 +14,8 @@ import { Label, NumberInput, TextInput } from '../../components/ui/Field';
 import { Segmented } from '../../components/ui/Segmented';
 import { setPendingFood } from './pendingFood';
 import { per100Problem } from '../../lib/food';
+import { readTextFromImage } from '../../lib/scan/ocr';
+import { parseNutritionLabel } from '../../lib/scan/nutritionLabel';
 import { useGoBack } from '../../hooks/useGoBack';
 
 type Basis = '100' | 'serving';
@@ -56,6 +58,36 @@ export default function CustomFoodPage() {
   const [loaded, setLoaded] = useState(!editId);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const goBack = useGoBack();
+  const [label, setLabel] = useState<{ state: 'idle' } | { state: 'reading'; progress: number } | { state: 'error'; message: string } | { state: 'done'; warnings: string[] }>({ state: 'idle' });
+
+  /** Read the photographed table into the form. The player still checks and saves; nothing is saved from here. */
+  const onLabelPhoto = async (file: File | undefined) => {
+    if (!file) return;
+    setLabel({ state: 'reading', progress: 0 });
+    try {
+      const text = await readTextFromImage(file, (p) => setLabel({ state: 'reading', progress: p }));
+      const r = parseNutritionLabel(text);
+      if (!r) {
+        setLabel({ state: 'error', message: 'No nutrition table found. Fill the table in the photo, with good light and no glare, or type the values below.' });
+        return;
+      }
+      setValues(r.values);
+      setUnit(r.unit);
+      setBasis(r.basis);
+      if (r.servingAmount) {
+        setServingAmount(r.servingAmount);
+        setServingLabel(r.servingLabel ?? '');
+      }
+      const warnings = [...r.warnings];
+      if (r.basis === 'serving' && !r.servingAmount) warnings.push('These values are per serving. Enter the serving size in grams or ml.');
+      setLabel({ state: 'done', warnings });
+    } catch {
+      setLabel({
+        state: 'error',
+        message: navigator.onLine === false ? 'The text reader needs a connection the first time. You can type the values instead.' : 'Couldn’t read the photo. Try again, or type the values.',
+      });
+    }
+  };
 
   useEffect(() => {
     if (!editId) return;
@@ -116,6 +148,39 @@ export default function CustomFoodPage() {
     <Page>
       <PageHeader back kicker="Forge a new item" title={editId ? 'Edit food' : 'Custom food'} />
       <div className="space-y-4">
+        {!editId && (
+          <Card className="space-y-3">
+            <label className="flex h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-2xl bg-gradient-to-br from-[#0369a1] to-[#2563eb] font-semibold text-white">
+              <Camera size={18} /> Photograph the nutrition label
+              <input
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="sr-only"
+                onChange={(e) => {
+                  void onLabelPhoto(e.target.files?.[0]);
+                  e.target.value = '';
+                }}
+              />
+            </label>
+            {label.state === 'reading' && (
+              <p className="flex items-center gap-2 text-sm text-muted" role="status">
+                <Loader2 size={16} className="animate-spin text-primary" />
+                Reading the label{label.progress > 0 ? ` · ${Math.round(label.progress * 100)}%` : '…'}
+              </p>
+            )}
+            {label.state === 'error' && <p className="text-sm text-orange">{label.message}</p>}
+            {label.state === 'done' && (
+              <div className="space-y-1 text-sm" role="status">
+                <p className="font-semibold">Label read. Check every number against the pack before saving.</p>
+                {label.warnings.map((w) => (
+                  <p key={w} className="text-orange">{w}</p>
+                ))}
+              </div>
+            )}
+            <p className="text-xs text-faint">Read on your phone, never uploaded. Fill in the name below, then save.</p>
+          </Card>
+        )}
         <Card className="space-y-4">
           <div>
             <Label htmlFor="cf-name">Name</Label>
