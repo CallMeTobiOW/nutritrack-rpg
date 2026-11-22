@@ -1,30 +1,80 @@
+import { useEffect } from 'react';
 import { useRegisterSW } from 'virtual:pwa-register/react';
-import { RefreshCw } from 'lucide-react';
-import { Button } from '../ui/Button';
 
-/** Shows a small banner when a new version of the app has been downloaded. */
+const RELOAD_KEY = 'nutritrack-update-reloaded-at';
+/** Never reload twice within this window, so a misbehaving worker can't cause a loop. */
+const RELOAD_COOLDOWN_MS = 30_000;
+
+function isTyping(): boolean {
+  const el = document.activeElement;
+  return (
+    el instanceof HTMLInputElement ||
+    el instanceof HTMLTextAreaElement ||
+    el instanceof HTMLSelectElement ||
+    (el instanceof HTMLElement && el.isContentEditable)
+  );
+}
+
+function reload() {
+  try {
+    const last = Number(sessionStorage.getItem(RELOAD_KEY) ?? 0);
+    if (Date.now() - last < RELOAD_COOLDOWN_MS) return;
+    sessionStorage.setItem(RELOAD_KEY, String(Date.now()));
+  } catch {
+    // sessionStorage unavailable: reload anyway, once per controller change.
+  }
+  window.location.reload();
+}
+
+/**
+ * Applies new versions automatically. The service worker activates itself as
+ * soon as it has downloaded the new files; once it takes control we reload so
+ * the page runs the new code. If the user is typing, we wait until they leave
+ * the field or send the app to the background. User data in IndexedDB is not
+ * touched by any of this.
+ */
 export function UpdatePrompt() {
-  const {
-    needRefresh: [needRefresh, setNeedRefresh],
-    updateServiceWorker,
-  } = useRegisterSW({
+  useRegisterSW({
     onRegisteredSW(_url, reg) {
-      // Check for updates hourly while the app is open.
-      if (reg) setInterval(() => void reg.update(), 60 * 60 * 1000);
+      if (!reg) return;
+      const check = () => void reg.update().catch(() => undefined);
+      // Check hourly while open, and whenever the app comes back to the foreground
+      // (an iPhone home-screen app is resumed, not relaunched).
+      setInterval(check, 60 * 60 * 1000);
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') check();
+      });
     },
   });
 
-  if (!needRefresh) return null;
-  return (
-    <div className="animate-fade-up fixed inset-x-4 bottom-[calc(5rem+env(safe-area-inset-bottom))] z-50 mx-auto flex max-w-md items-center gap-3 rounded-2xl border border-line-strong bg-surface-2 p-3 shadow-2xl">
-      <RefreshCw size={20} className="ml-1 shrink-0 text-primary" />
-      <p className="min-w-0 flex-1 text-sm">A new version of NutriTrack is ready.</p>
-      <Button size="sm" variant="ghost" onClick={() => setNeedRefresh(false)}>
-        Later
-      </Button>
-      <Button size="sm" variant="primary" onClick={() => void updateServiceWorker(true)}>
-        Update
-      </Button>
-    </div>
-  );
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return;
+    // No controller yet means this is the first install, not an update.
+    let hadController = Boolean(navigator.serviceWorker.controller);
+    let pending = false;
+
+    const tryReload = () => {
+      if (!pending) return;
+      if (document.visibilityState === 'hidden' || !isTyping()) reload();
+    };
+    const onControllerChange = () => {
+      if (!hadController) {
+        hadController = true;
+        return;
+      }
+      pending = true;
+      tryReload();
+    };
+
+    navigator.serviceWorker.addEventListener('controllerchange', onControllerChange);
+    document.addEventListener('focusout', tryReload);
+    document.addEventListener('visibilitychange', tryReload);
+    return () => {
+      navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange);
+      document.removeEventListener('focusout', tryReload);
+      document.removeEventListener('visibilitychange', tryReload);
+    };
+  }, []);
+
+  return null;
 }
