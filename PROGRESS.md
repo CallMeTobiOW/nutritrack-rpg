@@ -87,3 +87,7 @@ Version 0.1.0 — all ten build phases complete. Built and tested in the cloud; 
 - Search ranking (`src/lib/foodSearch.ts`): plain foods before flavoured products, plurals, typos, half-typed words; 70 bundled everyday UK foods (`src/data/genericFoods.ts`); UK-first online search; typed barcode goes straight to the product; "Nothing found" card with one-tap custom food.
 - Supermarkets (`src/data/supermarkets.ts`): scanned/searched products show "Tesco own brand" / "Sold at …" from Open Food Facts brand and store data. Not verified against live Open Food Facts (cloud blocked); check on the phone.
 - GS1 UK lookups and supermarket sites/apps are deliberately not used (terms).
+
+## v0.9.0 — Read the nutrition label from a photo (2026-11-20)
+- Custom food page: "Photograph the nutrition label" reads the table on the phone (same Tesseract reader as ingredients) and fills the form; the player checks every number and saves. Parser: `src/lib/scan/nutritionLabel.ts` (two columns, per 100 g vs per serving, kJ/kcal, sodium to salt, "<0.5", %RI ignored) with warnings for impossible or inconsistent values.
+- Not yet tried with real photos: the text reader's engine can't be downloaded from the cloud, so only the parser is tested (14 tests).

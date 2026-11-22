@@ -346,7 +346,7 @@ export default function ScannerPage() {
                 : `${problem.message} It's in your scan inbox and will be looked up automatically when you're back online.`}
             </p>
             <Button variant="primary" block onClick={() => addByHand(problem.code)}>
-              <PenLine size={18} /> Add it from the pack
+              <PenLine size={18} /> Add it from the pack (photo or typing)
             </Button>
             <Button block onClick={() => navigate(`/food/add?${ctx}`, { replace: true })}>
               <PackageSearch size={18} /> Search by name instead
