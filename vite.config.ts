@@ -41,6 +41,10 @@ export default defineConfig({
         ],
       },
       workbox: {
+        // A new version takes over as soon as it is downloaded; UpdatePrompt then
+        // reloads the page at a safe moment so old and new files never mix.
+        skipWaiting: true,
+        clientsClaim: true,
         // .wasm is the barcode reader, precached so scanning works offline.
         globPatterns: ['**/*.{js,css,html,svg,png,woff2,webmanifest,wasm}'],
         // Only precache the Latin font subsets; other scripts load on demand if ever needed.
